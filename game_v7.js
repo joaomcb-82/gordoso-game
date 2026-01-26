@@ -1,3 +1,4 @@
+alert("BUILD NUEVA: ESCENAS + FLECHAS");
 console.log("✅ GAME_V7 FINAL CARGADO (ESCENAS)");
 
 const BASE_W = 960;
