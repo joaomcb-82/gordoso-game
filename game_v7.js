@@ -1,370 +1,341 @@
-// Gordoso - Bangkok Run (FIX FREEZE: HITBOX PUERTA PEQUEÑO + CHECK DISTANCIA + BOTONES MÓVIL)
+// Gordoso - Bangkok Run (v7) - Mobile fixes + stomp enemies
 
-const BASE_W = 960;
-const BASE_H = 540;
-const WORLD_WIDTH = 2400;
-
-const PLAYER_SCALE = 0.10;
-const SKUNK_SCALE  = 0.34;
-const DOOR_SCALE   = 0.35;
-const BURGER_SCALE = 0.12;
-
-const STOMP_BOUNCE = 380;
-const STOMP_MARGIN = 10;
+// ====== CONFIG ======
+const WIDTH = 960;
+const HEIGHT = 540;
+const WORLD_WIDTH = 2000;
 
 const config = {
   type: Phaser.AUTO,
+  width: WIDTH,
+  height: HEIGHT,
   parent: "game",
-  width: BASE_W,
-  height: BASE_H,
+  backgroundColor: "#000000",
+  physics: {
+    default: "arcade",
+    arcade: {
+      gravity: { y: 1200 },
+      debug: false,
+    },
+  },
+  // 🔥 clave para móvil (letterbox correcto, sin estirar)
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: BASE_W,
-    height: BASE_H,
+    width: WIDTH,
+    height: HEIGHT,
   },
-  physics: {
-    default: "arcade",
-    arcade: { gravity: { y: 1200 }, debug: false },
-  },
-  scene: [MainScene, EndScene],
+  scene: { preload, create, update },
 };
 
 new Phaser.Game(config);
 
-function MainScene() { Phaser.Scene.call(this, { key: "MainScene" }); }
-MainScene.prototype = Object.create(Phaser.Scene.prototype);
-MainScene.prototype.constructor = MainScene;
+// ====== GLOBALS ======
+let player;
+let platforms;
+let burgers;
+let enemies;
+let door;
+let score = 0;
+let scoreText;
 
-MainScene.prototype.preload = function () {
+let cursors, keyW, keySpace;
+let keyA, keyD;
+
+// Estado de controles táctiles
+let touchLeft = false;
+let touchRight = false;
+let touchJumpQueued = false;
+
+function preload() {
   this.load.image("bg", "assets/bangkok_bg.jpg");
   this.load.image("gordoso", "assets/gordoso.png");
   this.load.image("burger", "assets/burger.png");
   this.load.image("skunk", "assets/skunk.png");
   this.load.image("door", "assets/door.png");
+  // (si tienes girl/thai_flag para escena final, no afecta aquí)
+}
 
-  this.load.image("girl", "assets/girl.png");
-  this.load.image("thaiFlag", "assets/thai_flag.png");
-};
+function create() {
+  // ✅ Permite multi-touch real (mover + saltar a la vez)
+  this.input.addPointer(2);
 
-MainScene.prototype.create = function () {
-  // Multi-touch iPhone
-  this.input.addPointer(3);
-  this.input.setTopOnly(false);
+  // --- Fondo ---
+  const bg = this.add.image(0, 0, "bg")
+    .setOrigin(0, 0)
+    .setScrollFactor(0);
 
-  // Fondo
-  const bg = this.add.image(0, 0, "bg").setOrigin(0, 0).setScrollFactor(0);
   bg.displayWidth = WORLD_WIDTH;
-  bg.displayHeight = BASE_H;
+  bg.displayHeight = HEIGHT;
 
-  // Mundo/cámara
-  this.physics.world.setBounds(0, 0, WORLD_WIDTH, BASE_H);
-  this.cameras.main.setBounds(0, 0, WORLD_WIDTH, BASE_H);
+  // --- Mundo / cámara ---
+  this.physics.world.setBounds(0, 0, WORLD_WIDTH, HEIGHT);
+  this.cameras.main.setBounds(0, 0, WORLD_WIDTH, HEIGHT);
 
-  // Teclas PC
-  this.cursors = this.input.keyboard.createCursorKeys();
-  this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-  this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-  this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-  this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+  // --- Teclado ---
+  cursors = this.input.keyboard.createCursorKeys();
+  keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+  keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+  keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+  keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-  // Estado móvil
-  this.mobileLeft = false;
-  this.mobileRight = false;
-  this.mobileJumpQueued = false;
-
-  this.leftPID = null;
-  this.rightPID = null;
-  this.jumpPID = null;
-
-  const hardResetMobile = () => {
-    this.mobileLeft = false;
-    this.mobileRight = false;
-    this.mobileJumpQueued = false;
-    this.leftPID = null;
-    this.rightPID = null;
-    this.jumpPID = null;
-  };
-
-  this.input.on("pointerup", (p) => {
-    if (this.leftPID === p.id) { this.mobileLeft = false; this.leftPID = null; }
-    if (this.rightPID === p.id) { this.mobileRight = false; this.rightPID = null; }
-    if (this.jumpPID === p.id) { this.jumpPID = null; }
-  });
-  this.input.on("pointercancel", hardResetMobile);
-  this.game.events.on("blur", hardResetMobile);
-  window.addEventListener("touchend", hardResetMobile, { passive: true });
-  window.addEventListener("touchcancel", hardResetMobile, { passive: true });
-
-  // Plataformas textura
+  // --- Texturas para plataformas ---
   const g = this.add.graphics();
   g.fillStyle(0x1ddc00, 1);
-  g.fillRect(0, 0, 220, 22);
-  g.generateTexture("plat220x22", 220, 22);
+  g.fillRect(0, 0, 220, 20);
+  g.generateTexture("plat220x20", 220, 20);
   g.clear();
+  g.fillStyle(0x1ddc00, 1);
   g.fillRect(0, 0, WORLD_WIDTH, 40);
   g.generateTexture("ground", WORLD_WIDTH, 40);
   g.destroy();
 
-  // Plataformas
-  this.platforms = this.physics.add.staticGroup();
-  this.platforms.create(WORLD_WIDTH / 2, BASE_H - 20, "ground").refreshBody();
+  // --- Plataformas ---
+  platforms = this.physics.add.staticGroup();
 
-  this.platforms.create(420, 420, "plat220x22").refreshBody();
-  this.platforms.create(750, 340, "plat220x22").refreshBody();
-  this.platforms.create(1120, 420, "plat220x22").refreshBody();
-  this.platforms.create(1450, 320, "plat220x22").refreshBody();
-  this.platforms.create(1700, 420, "plat220x22").refreshBody();
-  this.platforms.create(2050, 360, "plat220x22").refreshBody();
+  // Suelo
+  platforms.create(WORLD_WIDTH / 2, HEIGHT - 20, "ground").refreshBody();
 
-  // Jugador
-  this.player = this.physics.add.sprite(120, 380, "gordoso");
-  this.player.setScale(PLAYER_SCALE);
-  this.player.setCollideWorldBounds(true);
-  this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.80, true);
+  // Plataformas (x, y)
+  platforms.create(420, 420, "plat220x20").refreshBody();
+  platforms.create(750, 340, "plat220x20").refreshBody();
+  platforms.create(1120, 420, "plat220x20").refreshBody();
+  platforms.create(1450, 320, "plat220x20").refreshBody();
+  platforms.create(1700, 420, "plat220x20").refreshBody();
 
-  this.physics.add.collider(this.player, this.platforms);
+  // --- Jugador ---
+  player = this.physics.add.sprite(120, 380, "gordoso");
+  player.setCollideWorldBounds(true);
 
-  // Cámara
-  this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+  // ✅ Ajuste proporciones (más pequeño)
+  player.setScale(0.16);
+
+  // ✅ Hitbox más razonable
+  player.body.setSize(player.width * 0.55, player.height * 0.80, true);
+
+  this.physics.add.collider(player, platforms);
+
+  // Cámara sigue al jugador
+  this.cameras.main.startFollow(player, true, 0.08, 0.08);
   this.cameras.main.setDeadzone(160, 120);
 
-  // Hamburguesas
-  this.burgers = this.physics.add.group({ bounceY: 0.2 });
-  [420, 760, 1120, 1450, 1700, 2050, 2280].forEach((x) => {
-    const b = this.burgers.create(x, 0, "burger");
-    b.setScale(BURGER_SCALE);
+  // --- Hamburguesas ---
+  burgers = this.physics.add.group({
+    bounceY: 0.2,
+    collideWorldBounds: true,
+  });
+
+  const burgerPositions = [
+    { x: 420, y: 0 },
+    { x: 760, y: 0 },
+    { x: 1120, y: 0 },
+    { x: 1450, y: 0 },
+    { x: 1700, y: 0 },
+  ];
+
+  burgerPositions.forEach(p => {
+    const b = burgers.create(p.x, p.y, "burger");
+    b.setScale(0.12);
     b.body.setSize(b.width * 0.7, b.height * 0.7, true);
   });
 
-  this.physics.add.collider(this.burgers, this.platforms);
-  this.physics.add.overlap(this.player, this.burgers, this.collectBurger, null, this);
+  this.physics.add.collider(burgers, platforms);
+  this.physics.add.overlap(player, burgers, collectBurger, null, this);
 
-  // Enemigos
-  this.enemies = this.physics.add.group();
-  const s1 = this.enemies.create(1200, 380, "skunk").setScale(SKUNK_SCALE);
-  const s2 = this.enemies.create(1600, 380, "skunk").setScale(SKUNK_SCALE);
+  // --- Enemigos (zorrillos) ---
+  enemies = this.physics.add.group();
 
-  s1.setVelocityX(-80); s2.setVelocityX(80);
-  s1.setCollideWorldBounds(true); s2.setCollideWorldBounds(true);
-  s1.body.setSize(s1.width * 0.78, s1.height * 0.80, true);
-  s2.body.setSize(s2.width * 0.78, s2.height * 0.80, true);
+  const s1 = enemies.create(1200, 380, "skunk");
+  s1.setScale(0.28); // ✅ más grande
+  s1.setCollideWorldBounds(true);
+  s1.setVelocityX(-80);
 
-  this.physics.add.collider(this.enemies, this.platforms);
-  this.physics.add.collider(this.player, this.enemies, this.playerEnemyCollide, null, this);
+  const s2 = enemies.create(1600, 380, "skunk");
+  s2.setScale(0.28); // ✅ más grande
+  s2.setCollideWorldBounds(true);
+  s2.setVelocityX(80);
 
-  // ✅ PUERTA (FIX HITBOX)
-  this.door = this.physics.add.staticSprite(WORLD_WIDTH - 150, 410, "door");
-  this.door.setScale(DOOR_SCALE);
-  this.door.refreshBody();
+  this.physics.add.collider(enemies, platforms);
 
-  // Reducimos hitbox a algo razonable (centrado)
-  // OJO: después de refreshBody(), body ya existe
-  const doorBodyW = 70;
-  const doorBodyH = 140;
-  this.door.body.setSize(doorBodyW, doorBodyH, false);
-  this.door.body.setOffset(
-    (this.door.displayWidth - doorBodyW) / 2,
-    (this.door.displayHeight - doorBodyH)
-  );
-  this.door.refreshBody();
+  // ✅ Overlap especial: stomp tipo Mario
+  this.physics.add.overlap(player, enemies, stompOrHit, null, this);
 
-  // ✅ Solo overlap con condición extra (evita ganar “en el aire” lejos)
-  this.physics.add.overlap(this.player, this.door, (player, door) => {
-    // Solo si estás realmente al lado de la puerta
-    if (player.x > door.x - 40) this.winLevel();
-  }, null, this);
+  // --- Puerta final ---
+  door = this.physics.add.staticSprite(WORLD_WIDTH - 120, 410, "door");
+  door.setScale(0.35);
+  door.refreshBody(); // ✅ IMPORTANTÍSIMO en cuerpos estáticos escalados
+  this.physics.add.overlap(player, door, winLevel, null, this);
 
-  // Score
-  this.score = 0;
-  this.scoreText = this.add.text(16, 16, "Score: 0", {
+  // --- UI Score ---
+  scoreText = this.add.text(16, 16, "Score: 0", {
+    fontFamily: "Arial",
     fontSize: "20px",
-    color: "#fff",
+    color: "#ffffff",
     backgroundColor: "rgba(0,0,0,0.45)",
     padding: { x: 10, y: 6 },
-  }).setScrollFactor(0).setDepth(9999);
+  }).setScrollFactor(0).setDepth(2000);
 
-  // Botones móvil
-  this.createMobileButtons();
-  this.scale.on("resize", () => this.positionMobileButtons());
-  this.positionMobileButtons();
-};
+  // --- Controles táctiles (solo si hay touch) ---
+  // Nota: NO son objetos de física => no bloquean al jugador
+  createTouchControls.call(this);
+}
 
-MainScene.prototype.createMobileButtons = function () {
-  this.ui = this.add.container(0, 0).setScrollFactor(0).setDepth(9999);
+function createTouchControls() {
+  const isTouch = this.sys.game.device.input.touch;
+  if (!isTouch) return;
 
-  const btnW = 88, btnH = 66;
-  const jumpW = 120, jumpH = 66;
+  const ui = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
 
-  this.leftBtn = this.add.rectangle(0, 0, btnW, btnH, 0x000000, 0.22)
-    .setStrokeStyle(2, 0xffffff, 0.7)
-    .setInteractive();
-  this.leftTxt = this.add.text(0, 0, "◀", { fontFamily: "Arial", fontSize: "34px", color: "#fff" }).setOrigin(0.5);
+  // Botón base
+  const makeBtn = (x, y, w, h, label) => {
+    const rect = this.add.rectangle(x, y, w, h, 0xffffff, 0.18)
+      .setStrokeStyle(2, 0xffffff, 0.25)
+      .setOrigin(0, 0)
+      .setInteractive({ useHandCursor: false });
 
-  this.rightBtn = this.add.rectangle(0, 0, btnW, btnH, 0x000000, 0.22)
-    .setStrokeStyle(2, 0xffffff, 0.7)
-    .setInteractive();
-  this.rightTxt = this.add.text(0, 0, "▶", { fontFamily: "Arial", fontSize: "34px", color: "#fff" }).setOrigin(0.5);
+    const txt = this.add.text(x + w / 2, y + h / 2, label, {
+      fontFamily: "Arial",
+      fontSize: "20px",
+      color: "#ffffff",
+    }).setOrigin(0.5);
 
-  this.jumpBtn = this.add.rectangle(0, 0, jumpW, jumpH, 0x000000, 0.22)
-    .setStrokeStyle(2, 0xffffff, 0.7)
-    .setInteractive();
-  this.jumpTxt = this.add.text(0, 0, "JUMP", { fontFamily: "Arial", fontSize: "20px", color: "#fff" }).setOrigin(0.5);
+    ui.add([rect, txt]);
+    return rect;
+  };
 
-  this.ui.add([this.leftBtn, this.leftTxt, this.rightBtn, this.rightTxt, this.jumpBtn, this.jumpTxt]);
+  // Layout: abajo a la izquierda 2 botones (◀ ▶), a la derecha JUMP
+  const pad = 16;
+  const btn = 70;
+  const bottom = HEIGHT - btn - pad;
 
-  // pointerId por botón
-  this.leftBtn.on("pointerdown", (p) => { this.mobileLeft = true; this.leftPID = p.id; });
-  this.rightBtn.on("pointerdown", (p) => { this.mobileRight = true; this.rightPID = p.id; });
-  this.jumpBtn.on("pointerdown", (p) => { this.jumpPID = p.id; this.mobileJumpQueued = true; });
-};
+  const leftBtn  = makeBtn(pad, bottom, btn, btn, "◀");
+  const rightBtn = makeBtn(pad + btn + 12, bottom, btn, btn, "▶");
+  const jumpBtn  = makeBtn(WIDTH - btn - pad, bottom, btn + 25, btn, "JUMP");
 
-MainScene.prototype.positionMobileButtons = function () {
-  const w = this.scale.width;
-  const h = this.scale.height;
+  // Helper robusto para evitar botones “pegados”
+  const bindHold = (obj, onDown, onUp) => {
+    obj.on("pointerdown", (p) => {
+      p.event?.preventDefault?.();
+      onDown();
+    });
+    obj.on("pointerup", (p) => {
+      p.event?.preventDefault?.();
+      onUp();
+    });
+    obj.on("pointerout", () => onUp());
+    obj.on("pointercancel", () => onUp());
+    obj.on("pointerupoutside", () => onUp());
+  };
 
-  const side = 18;
-  const bottom = 20;
-  const y = h - bottom - 40;
+  bindHold(leftBtn,
+    () => { touchLeft = true; },
+    () => { touchLeft = false; }
+  );
 
-  const leftX  = side + 55;
-  const rightX = side + 55 + 105;
-  const jumpX  = w - side - 70;
+  bindHold(rightBtn,
+    () => { touchRight = true; },
+    () => { touchRight = false; }
+  );
 
-  this.leftBtn.setPosition(leftX, y);
-  this.leftTxt.setPosition(leftX, y);
+  // Jump: se “encola” (para que funcione aunque justo no esté en el suelo)
+  bindHold(jumpBtn,
+    () => { touchJumpQueued = true; },
+    () => { /* no hacer nada */ }
+  );
 
-  this.rightBtn.setPosition(rightX, y);
-  this.rightTxt.setPosition(rightX, y);
+  // Por si Safari “pierde” el touch al cambiar orientación:
+  this.scale.on("resize", () => {
+    touchLeft = false;
+    touchRight = false;
+    touchJumpQueued = false;
+  });
+}
 
-  this.jumpBtn.setPosition(jumpX, y);
-  this.jumpTxt.setPosition(jumpX, y);
-};
+function update() {
+  // --- Movimiento ---
+  const leftKey = cursors.left.isDown || keyA.isDown;
+  const rightKey = cursors.right.isDown || keyD.isDown;
 
-MainScene.prototype.update = function () {
-  const left = this.cursors.left.isDown || this.keyA.isDown || this.mobileLeft;
-  const right = this.cursors.right.isDown || this.keyD.isDown || this.mobileRight;
+  const left = leftKey || touchLeft;
+  const right = rightKey || touchRight;
 
-  if (left) {
-    this.player.setVelocityX(-220);
-    this.player.setFlipX(true);
-  } else if (right) {
-    this.player.setVelocityX(220);
-    this.player.setFlipX(false);
+  if (left && !right) {
+    player.setVelocityX(-220);
+    player.setFlipX(true);
+  } else if (right && !left) {
+    player.setVelocityX(220);
+    player.setFlipX(false);
   } else {
-    this.player.setVelocityX(0);
+    player.setVelocityX(0);
   }
 
-  const jumpPressedPC =
-    Phaser.Input.Keyboard.JustDown(this.keySpace) ||
-    Phaser.Input.Keyboard.JustDown(this.keyW) ||
-    Phaser.Input.Keyboard.JustDown(this.cursors.up);
+  // --- Salto teclado ---
+  const jumpPressed =
+    Phaser.Input.Keyboard.JustDown(keySpace) ||
+    Phaser.Input.Keyboard.JustDown(keyW) ||
+    Phaser.Input.Keyboard.JustDown(cursors.up);
 
-  const jumpPressedMobile = this.mobileJumpQueued;
-
-  if ((jumpPressedPC || jumpPressedMobile) && this.player.body.blocked.down) {
-    this.player.setVelocityY(-520);
+  // --- Salto táctil (encolado) ---
+  if (touchJumpQueued && player.body.blocked.down) {
+    player.setVelocityY(-520);
+    touchJumpQueued = false;
   }
-  this.mobileJumpQueued = false;
 
-  this.enemies.children.iterate((e) => {
+  if (jumpPressed && player.body.blocked.down) {
+    player.setVelocityY(-520);
+  }
+
+  // IA simple enemigos: rebotan en bordes
+  enemies.children.iterate(e => {
     if (!e) return;
     if (e.body.blocked.left) e.setVelocityX(80);
     if (e.body.blocked.right) e.setVelocityX(-80);
   });
-};
+}
 
-MainScene.prototype.collectBurger = function (player, burger) {
+function collectBurger(player, burger) {
   burger.disableBody(true, true);
-  this.score += 10;
-  this.scoreText.setText("Score: " + this.score);
-};
+  score += 10;
+  scoreText.setText("Score: " + score);
+}
 
-MainScene.prototype.playerEnemyCollide = function (player, enemy) {
-  if (!enemy.active || !player.active) return;
+// ✅ Mario stomp: si estás cayendo y vienes desde arriba => matas enemigo
+function stompOrHit(player, enemy) {
+  if (!enemy.active) return;
 
-  const playerFalling = player.body.velocity.y > 0;
-  const playerBottom = player.body.y + player.body.height;
-  const enemyTop = enemy.body.y;
-  const comingFromAbove = playerBottom <= enemyTop + STOMP_MARGIN;
+  const playerFalling = player.body.velocity.y > 50;
+  const playerAboveEnemy = player.body.bottom <= enemy.body.top + 10;
 
-  if (playerFalling && comingFromAbove) {
+  if (playerFalling && playerAboveEnemy) {
     enemy.disableBody(true, true);
-    player.setVelocityY(-STOMP_BOUNCE);
-    this.score += 25;
-    this.scoreText.setText("Score: " + this.score);
+    player.setVelocityY(-380); // rebote
+    score += 50;
+    scoreText.setText("Score: " + score);
   } else {
-    player.setTint(0xff0000);
-    this.time.delayedCall(150, () => {
-      player.clearTint();
-      player.setVelocity(0, 0);
-      player.setPosition(120, 380);
-    });
+    hitEnemy.call(this, player, enemy);
   }
-};
+}
 
-MainScene.prototype.winLevel = function () {
-  // Evita doble-trigger
-  if (this._won) return;
-  this._won = true;
-
-  this.player.setVelocity(0, 0);
-  this.player.body.enable = false;
-
-  this.time.delayedCall(250, () => {
-    this.scene.start("EndScene", { score: this.score });
+function hitEnemy(player, enemy) {
+  player.setTint(0xff0000);
+  this.time.delayedCall(150, () => {
+    player.clearTint();
+    player.setVelocity(0, 0);
+    player.setPosition(120, 380);
   });
-};
+}
 
-// =================== END SCENE ===================
-function EndScene() { Phaser.Scene.call(this, { key: "EndScene" }); }
-EndScene.prototype = Object.create(Phaser.Scene.prototype);
-EndScene.prototype.constructor = EndScene;
+function winLevel(player, door) {
+  player.setVelocity(0, 0);
+  player.body.enable = false;
 
-EndScene.prototype.init = function (data) { this.score = data.score || 0; };
-
-EndScene.prototype.create = function () {
-  const w = this.scale.width;
-  const h = this.scale.height;
-
-  this.add.image(w / 2, h / 2, "bg").setDisplaySize(w, h);
-  this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.4);
-
-  this.add.text(w / 2, 60, "¡RESCATE COMPLETADO!", {
-    fontSize: "36px",
-    color: "#fff",
+  const msg = this.add.text(WIDTH / 2, HEIGHT / 2, "¡Nivel completado!", {
+    fontFamily: "Arial",
+    fontSize: "40px",
+    color: "#ffffff",
     backgroundColor: "rgba(0,0,0,0.6)",
-    padding: { x: 14, y: 10 },
-  }).setOrigin(0.5);
+    padding: { x: 18, y: 10 },
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(4000);
 
-  this.add.text(w / 2, 110, `Score: ${this.score}`, {
-    fontSize: "20px",
-    color: "#fff",
-  }).setOrigin(0.5);
-
-  this.add.sprite(w * 0.25, h * 0.65, "gordoso").setScale(PLAYER_SCALE * 1.4);
-
-  const girlX = w * 0.60;
-  const girlY = h * 0.65;
-
-  const girl = this.add.sprite(girlX, girlY, "girl").setScale(0.34);
-  const flag = this.add.sprite(girlX + 46, girlY - 18, "thaiFlag").setScale(0.20);
-
-  this.tweens.add({
-    targets: [girl, flag],
-    y: girlY - 12,
-    duration: 700,
-    yoyo: true,
-    repeat: -1,
-    ease: "Sine.easeInOut",
-  });
-
-  this.add.text(w / 2, h - 60, "Presiona R para reiniciar", {
-    fontSize: "18px",
-    color: "#fff",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    padding: { x: 12, y: 8 },
-  }).setOrigin(0.5);
-
-  this.input.keyboard.once("keydown-R", () => this.scene.start("MainScene"));
-};
+  this.time.delayedCall(1500, () => msg.destroy());
+}
