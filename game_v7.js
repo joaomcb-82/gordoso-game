@@ -47,7 +47,7 @@ class PlayScene extends Phaser.Scene {
 
     // Player
     this.player = this.physics.add.sprite(90, 420, "gordoso");
-    this.player.setScale(0.12);
+    this.player.setScale(0.095);
     this.player.setCollideWorldBounds(true);
     this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.82, true);
     this.physics.add.collider(this.player, this.platforms);
@@ -142,12 +142,12 @@ class PlayScene extends Phaser.Scene {
 
   makeSkunk(x, y, vx) {
     const s = this.physics.add.sprite(x, y, "skunk");
-    s.setScale(0.14);
+    s.setScale(0.20);
     s.setBounce(1);
     s.setCollideWorldBounds(true);
     s.setVelocityX(vx);
     s.setData("dir", vx >= 0 ? 1 : -1);
-    s.body.setSize(s.width * 0.7, s.height * 0.7, true);
+    s.body.setSize(s.width * 0.65, s.height * 0.7, true);
     this.skunks.add(s);
   }
 
