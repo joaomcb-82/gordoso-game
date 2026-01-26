@@ -1,136 +1,120 @@
-// Gordoso - Bangkok Run (v7) - Mobile fixes + stomp enemies
+// Gordoso - Bangkok Run (v7 estable PC + móvil)
 
 // ====== CONFIG ======
-const WIDTH = 960;
-const HEIGHT = 540;
-const WORLD_WIDTH = 2000;
+const BASE_W = 960;
+const BASE_H = 540;
+const WORLD_W = 2000;
 
 const config = {
   type: Phaser.AUTO,
-  width: WIDTH,
-  height: HEIGHT,
   parent: "game",
+  width: BASE_W,
+  height: BASE_H,
   backgroundColor: "#000000",
   physics: {
     default: "arcade",
-    arcade: {
-      gravity: { y: 1200 },
-      debug: false,
-    },
+    arcade: { gravity: { y: 1200 }, debug: false }
   },
-  // 🔥 clave para móvil (letterbox correcto, sin estirar)
+  input: {
+    activePointers: 3 // multi-touch real (mover + saltar)
+  },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: WIDTH,
-    height: HEIGHT,
+    width: BASE_W,
+    height: BASE_H
   },
-  scene: { preload, create, update },
+  scene: { preload, create, update }
 };
 
 new Phaser.Game(config);
 
 // ====== GLOBALS ======
-let player;
-let platforms;
-let burgers;
-let enemies;
-let door;
-let score = 0;
-let scoreText;
-
+let player, platforms, burgers, enemies, door;
 let cursors, keyW, keySpace;
-let keyA, keyD;
+let score = 0, scoreText;
 
-// Estado de controles táctiles
-let touchLeft = false;
-let touchRight = false;
-let touchJumpQueued = false;
+let touch = {
+  left: false,
+  right: false,
+  jump: false
+};
 
 function preload() {
+  // Assets (en /assets)
   this.load.image("bg", "assets/bangkok_bg.jpg");
   this.load.image("gordoso", "assets/gordoso.png");
   this.load.image("burger", "assets/burger.png");
   this.load.image("skunk", "assets/skunk.png");
   this.load.image("door", "assets/door.png");
-  // (si tienes girl/thai_flag para escena final, no afecta aquí)
+
+  // Final
+  this.load.image("girl", "assets/girl.png");
+  this.load.image("thai", "assets/thai_flag.png");
 }
 
 function create() {
-  // ✅ Permite multi-touch real (mover + saltar a la vez)
-  this.input.addPointer(2);
+  // ===== Fondo =====
+  const bg = this.add.image(0, 0, "bg").setOrigin(0, 0).setScrollFactor(0);
+  bg.displayWidth = WORLD_W;
+  bg.displayHeight = BASE_H;
 
-  // --- Fondo ---
-  const bg = this.add.image(0, 0, "bg")
-    .setOrigin(0, 0)
-    .setScrollFactor(0);
+  // ===== Mundo / cámara =====
+  this.physics.world.setBounds(0, 0, WORLD_W, BASE_H);
+  this.cameras.main.setBounds(0, 0, WORLD_W, BASE_H);
 
-  bg.displayWidth = WORLD_WIDTH;
-  bg.displayHeight = HEIGHT;
-
-  // --- Mundo / cámara ---
-  this.physics.world.setBounds(0, 0, WORLD_WIDTH, HEIGHT);
-  this.cameras.main.setBounds(0, 0, WORLD_WIDTH, HEIGHT);
-
-  // --- Teclado ---
+  // ===== Teclas =====
   cursors = this.input.keyboard.createCursorKeys();
   keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
   keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-  keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-  keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-  // --- Texturas para plataformas ---
+  // ===== Texturas plataformas (siempre visibles) =====
   const g = this.add.graphics();
   g.fillStyle(0x1ddc00, 1);
   g.fillRect(0, 0, 220, 20);
-  g.generateTexture("plat220x20", 220, 20);
+  g.generateTexture("plat", 220, 20);
   g.clear();
   g.fillStyle(0x1ddc00, 1);
-  g.fillRect(0, 0, WORLD_WIDTH, 40);
-  g.generateTexture("ground", WORLD_WIDTH, 40);
+  g.fillRect(0, 0, WORLD_W, 40);
+  g.generateTexture("ground", WORLD_W, 40);
   g.destroy();
 
-  // --- Plataformas ---
+  // ===== Plataformas =====
   platforms = this.physics.add.staticGroup();
+  platforms.create(WORLD_W / 2, BASE_H - 20, "ground").refreshBody();
 
-  // Suelo
-  platforms.create(WORLD_WIDTH / 2, HEIGHT - 20, "ground").refreshBody();
+  platforms.create(420, 420, "plat").refreshBody();
+  platforms.create(750, 340, "plat").refreshBody();
+  platforms.create(1120, 420, "plat").refreshBody();
+  platforms.create(1450, 320, "plat").refreshBody();
+  platforms.create(1700, 420, "plat").refreshBody();
 
-  // Plataformas (x, y)
-  platforms.create(420, 420, "plat220x20").refreshBody();
-  platforms.create(750, 340, "plat220x20").refreshBody();
-  platforms.create(1120, 420, "plat220x20").refreshBody();
-  platforms.create(1450, 320, "plat220x20").refreshBody();
-  platforms.create(1700, 420, "plat220x20").refreshBody();
-
-  // --- Jugador ---
+  // ===== Jugador =====
   player = this.physics.add.sprite(120, 380, "gordoso");
   player.setCollideWorldBounds(true);
 
-  // ✅ Ajuste proporciones (más pequeño)
+  // Ajuste proporción (más pequeño)
   player.setScale(0.16);
 
-  // ✅ Hitbox más razonable
-  player.body.setSize(player.width * 0.55, player.height * 0.80, true);
+  // Hitbox más razonable (evita “barreras invisibles”)
+  player.body.setSize(player.width * 0.45, player.height * 0.70, true);
+  player.body.setOffset(player.width * 0.275, player.height * 0.22);
 
   this.physics.add.collider(player, platforms);
 
-  // Cámara sigue al jugador
-  this.cameras.main.startFollow(player, true, 0.08, 0.08);
-  this.cameras.main.setDeadzone(160, 120);
+  // Cámara
+  this.cameras.main.startFollow(player, true, 0.10, 0.10);
+  this.cameras.main.setDeadzone(180, 120);
 
-  // --- Hamburguesas ---
-  burgers = this.physics.add.group({
-    bounceY: 0.2,
-    collideWorldBounds: true,
-  });
+  // ===== Hamburguesas =====
+  burgers = this.physics.add.group({ bounceY: 0.2, collideWorldBounds: true });
 
   const burgerPositions = [
     { x: 420, y: 0 },
     { x: 760, y: 0 },
     { x: 1120, y: 0 },
     { x: 1450, y: 0 },
-    { x: 1700, y: 0 },
+    { x: 1700, y: 0 }
   ];
 
   burgerPositions.forEach(p => {
@@ -142,122 +126,62 @@ function create() {
   this.physics.add.collider(burgers, platforms);
   this.physics.add.overlap(player, burgers, collectBurger, null, this);
 
-  // --- Enemigos (zorrillos) ---
+  // ===== Enemigos =====
   enemies = this.physics.add.group();
 
   const s1 = enemies.create(1200, 380, "skunk");
-  s1.setScale(0.28); // ✅ más grande
+  s1.setScale(0.32); // más grande
   s1.setCollideWorldBounds(true);
-  s1.setVelocityX(-80);
+  s1.setVelocityX(-90);
 
   const s2 = enemies.create(1600, 380, "skunk");
-  s2.setScale(0.28); // ✅ más grande
+  s2.setScale(0.32); // más grande
   s2.setCollideWorldBounds(true);
-  s2.setVelocityX(80);
+  s2.setVelocityX(90);
+
+  // Ajuste hitbox enemigo (para que el “stomp” sea consistente)
+  enemies.children.iterate(e => {
+    if (!e) return;
+    e.body.setSize(e.width * 0.65, e.height * 0.70, true);
+    e.body.setOffset(e.width * 0.175, e.height * 0.25);
+  });
 
   this.physics.add.collider(enemies, platforms);
 
-  // ✅ Overlap especial: stomp tipo Mario
-  this.physics.add.overlap(player, enemies, stompOrHit, null, this);
+  // Overlap: ahora decide si lo matas o te pega
+  this.physics.add.overlap(player, enemies, playerVsEnemy, null, this);
 
-  // --- Puerta final ---
-  door = this.physics.add.staticSprite(WORLD_WIDTH - 120, 410, "door");
+  // ===== Puerta final =====
+  door = this.physics.add.staticSprite(WORLD_W - 120, 410, "door");
   door.setScale(0.35);
-  door.refreshBody(); // ✅ IMPORTANTÍSIMO en cuerpos estáticos escalados
   this.physics.add.overlap(player, door, winLevel, null, this);
 
-  // --- UI Score ---
+  // ===== Score UI =====
   scoreText = this.add.text(16, 16, "Score: 0", {
     fontFamily: "Arial",
     fontSize: "20px",
     color: "#ffffff",
     backgroundColor: "rgba(0,0,0,0.45)",
-    padding: { x: 10, y: 6 },
-  }).setScrollFactor(0).setDepth(2000);
+    padding: { x: 10, y: 6 }
+  }).setScrollFactor(0);
 
-  // --- Controles táctiles (solo si hay touch) ---
-  // Nota: NO son objetos de física => no bloquean al jugador
+  // ===== Controles táctiles =====
   createTouchControls.call(this);
-}
 
-function createTouchControls() {
-  const isTouch = this.sys.game.device.input.touch;
-  if (!isTouch) return;
-
-  const ui = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
-
-  // Botón base
-  const makeBtn = (x, y, w, h, label) => {
-    const rect = this.add.rectangle(x, y, w, h, 0xffffff, 0.18)
-      .setStrokeStyle(2, 0xffffff, 0.25)
-      .setOrigin(0, 0)
-      .setInteractive({ useHandCursor: false });
-
-    const txt = this.add.text(x + w / 2, y + h / 2, label, {
-      fontFamily: "Arial",
-      fontSize: "20px",
-      color: "#ffffff",
-    }).setOrigin(0.5);
-
-    ui.add([rect, txt]);
-    return rect;
-  };
-
-  // Layout: abajo a la izquierda 2 botones (◀ ▶), a la derecha JUMP
-  const pad = 16;
-  const btn = 70;
-  const bottom = HEIGHT - btn - pad;
-
-  const leftBtn  = makeBtn(pad, bottom, btn, btn, "◀");
-  const rightBtn = makeBtn(pad + btn + 12, bottom, btn, btn, "▶");
-  const jumpBtn  = makeBtn(WIDTH - btn - pad, bottom, btn + 25, btn, "JUMP");
-
-  // Helper robusto para evitar botones “pegados”
-  const bindHold = (obj, onDown, onUp) => {
-    obj.on("pointerdown", (p) => {
-      p.event?.preventDefault?.();
-      onDown();
-    });
-    obj.on("pointerup", (p) => {
-      p.event?.preventDefault?.();
-      onUp();
-    });
-    obj.on("pointerout", () => onUp());
-    obj.on("pointercancel", () => onUp());
-    obj.on("pointerupoutside", () => onUp());
-  };
-
-  bindHold(leftBtn,
-    () => { touchLeft = true; },
-    () => { touchLeft = false; }
-  );
-
-  bindHold(rightBtn,
-    () => { touchRight = true; },
-    () => { touchRight = false; }
-  );
-
-  // Jump: se “encola” (para que funcione aunque justo no esté en el suelo)
-  bindHold(jumpBtn,
-    () => { touchJumpQueued = true; },
-    () => { /* no hacer nada */ }
-  );
-
-  // Por si Safari “pierde” el touch al cambiar orientación:
+  // Recalcular posiciones de botones cuando cambie tamaño/orientación
   this.scale.on("resize", () => {
-    touchLeft = false;
-    touchRight = false;
-    touchJumpQueued = false;
+    positionTouchControls.call(this);
   });
 }
 
 function update() {
-  // --- Movimiento ---
-  const leftKey = cursors.left.isDown || keyA.isDown;
-  const rightKey = cursors.right.isDown || keyD.isDown;
+  // ===== Input teclado =====
+  const leftKey = cursors.left.isDown || this.input.keyboard.checkDown(this.input.keyboard.addKey("A"), 0);
+  const rightKey = cursors.right.isDown || this.input.keyboard.checkDown(this.input.keyboard.addKey("D"), 0);
 
-  const left = leftKey || touchLeft;
-  const right = rightKey || touchRight;
+  // ===== Input táctil =====
+  const left = leftKey || touch.left;
+  const right = rightKey || touch.right;
 
   if (left && !right) {
     player.setVelocityX(-220);
@@ -269,56 +193,56 @@ function update() {
     player.setVelocityX(0);
   }
 
-  // --- Salto teclado ---
-  const jumpPressed =
+  // Salto (teclado)
+  const jumpKeyPressed =
     Phaser.Input.Keyboard.JustDown(keySpace) ||
     Phaser.Input.Keyboard.JustDown(keyW) ||
     Phaser.Input.Keyboard.JustDown(cursors.up);
 
-  // --- Salto táctil (encolado) ---
-  if (touchJumpQueued && player.body.blocked.down) {
+  // Salto (táctil): si mantiene presionado, solo dispara 1 vez cuando está en suelo
+  if ((jumpKeyPressed || touch.jump) && player.body.blocked.down) {
     player.setVelocityY(-520);
-    touchJumpQueued = false;
+    touch.jump = false; // importantísimo para evitar salto infinito
   }
 
-  if (jumpPressed && player.body.blocked.down) {
-    player.setVelocityY(-520);
-  }
-
-  // IA simple enemigos: rebotan en bordes
+  // IA: rebotan en bordes
   enemies.children.iterate(e => {
-    if (!e) return;
-    if (e.body.blocked.left) e.setVelocityX(80);
-    if (e.body.blocked.right) e.setVelocityX(-80);
+    if (!e || !e.body) return;
+    if (e.body.blocked.left) e.setVelocityX(90);
+    if (e.body.blocked.right) e.setVelocityX(-90);
   });
 }
 
+// ====== LÓGICA ======
 function collectBurger(player, burger) {
   burger.disableBody(true, true);
   score += 10;
   scoreText.setText("Score: " + score);
 }
 
-// ✅ Mario stomp: si estás cayendo y vienes desde arriba => matas enemigo
-function stompOrHit(player, enemy) {
+// Mario-like stomp
+function playerVsEnemy(player, enemy) {
   if (!enemy.active) return;
 
-  const playerFalling = player.body.velocity.y > 50;
-  const playerAboveEnemy = player.body.bottom <= enemy.body.top + 10;
+  const playerFalling = player.body.velocity.y > 120;
+  const playerAbove = player.body.bottom <= enemy.body.top + 12;
 
-  if (playerFalling && playerAboveEnemy) {
+  // Si cae sobre el enemigo => lo mata
+  if (playerFalling && playerAbove) {
     enemy.disableBody(true, true);
     player.setVelocityY(-380); // rebote
-    score += 50;
+    score += 25;
     scoreText.setText("Score: " + score);
-  } else {
-    hitEnemy.call(this, player, enemy);
+    return;
   }
+
+  // Si no, te pega => reset
+  hitEnemy.call(this, player);
 }
 
-function hitEnemy(player, enemy) {
+function hitEnemy(player) {
   player.setTint(0xff0000);
-  this.time.delayedCall(150, () => {
+  this.time.delayedCall(160, () => {
     player.clearTint();
     player.setVelocity(0, 0);
     player.setPosition(120, 380);
@@ -326,16 +250,105 @@ function hitEnemy(player, enemy) {
 }
 
 function winLevel(player, door) {
+  // Congela jugador
   player.setVelocity(0, 0);
   player.body.enable = false;
 
-  const msg = this.add.text(WIDTH / 2, HEIGHT / 2, "¡Nivel completado!", {
-    fontFamily: "Arial",
-    fontSize: "40px",
-    color: "#ffffff",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    padding: { x: 18, y: 10 },
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(4000);
+  // Limpia controles táctiles para evitar “stick”
+  touch.left = touch.right = touch.jump = false;
 
-  this.time.delayedCall(1500, () => msg.destroy());
+  // Overlay final
+  const overlay = this.add.rectangle(0, 0, BASE_W, BASE_H, 0x000000, 0.55)
+    .setOrigin(0, 0)
+    .setScrollFactor(0);
+
+  const title = this.add.text(BASE_W / 2, 90, "¡Nivel completado!", {
+    fontFamily: "Arial",
+    fontSize: "44px",
+    color: "#ffffff"
+  }).setOrigin(0.5).setScrollFactor(0);
+
+  // Chica (una sola)
+  const girl = this.add.image(BASE_W / 2, 290, "girl")
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setScale(0.45);
+
+  // Bandera tailandia (una sola)
+  const flag = this.add.image(BASE_W / 2, 420, "thai")
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setScale(0.28);
+
+  const subtitle = this.add.text(BASE_W / 2, 485, "Gordoso rescató a la chica en Bangkok 🇹🇭", {
+    fontFamily: "Arial",
+    fontSize: "20px",
+    color: "#ffffff"
+  }).setOrigin(0.5).setScrollFactor(0);
+
+  // Opcional: reiniciar tocando pantalla
+  this.input.once("pointerdown", () => {
+    this.scene.restart();
+    score = 0;
+  });
+}
+
+// ====== CONTROLES TÁCTILES (Multi-touch real) ======
+function createTouchControls() {
+  // Zonas transparentes (sin depender de imágenes)
+  const ui = this.add.container(0, 0).setScrollFactor(0);
+  this._ui = ui;
+
+  // Crea rectángulos “botón”
+  const mkBtn = (w, h, label) => {
+    const btnBg = this.add.rectangle(0, 0, w, h, 0x000000, 0.25)
+      .setStrokeStyle(2, 0xffffff, 0.35);
+
+    const txt = this.add.text(0, 0, label, {
+      fontFamily: "Arial",
+      fontSize: "24px",
+      color: "#ffffff"
+    }).setOrigin(0.5);
+
+    const c = this.add.container(0, 0, [btnBg, txt]);
+    c.setSize(w, h);
+    c.setInteractive(new Phaser.Geom.Rectangle(-w/2, -h/2, w, h), Phaser.Geom.Rectangle.Contains);
+    ui.add(c);
+
+    return c;
+  };
+
+  this._btnLeft = mkBtn(86, 86, "◀");
+  this._btnRight = mkBtn(86, 86, "▶");
+  this._btnJump = mkBtn(140, 86, "JUMP");
+
+  // IMPORTANTÍSIMO para multi-touch: no “pisarse” entre botones
+  this.input.addPointer(2);
+
+  // Handlers (no usar pointerover; solo down/up/out)
+  this._btnLeft.on("pointerdown", () => { touch.left = true; });
+  this._btnLeft.on("pointerup", () => { touch.left = false; });
+  this._btnLeft.on("pointerout", () => { touch.left = false; });
+
+  this._btnRight.on("pointerdown", () => { touch.right = true; });
+  this._btnRight.on("pointerup", () => { touch.right = false; });
+  this._btnRight.on("pointerout", () => { touch.right = false; });
+
+  this._btnJump.on("pointerdown", () => { touch.jump = true; });
+  this._btnJump.on("pointerup", () => { /* no apagar aquí: lo apago al saltar */ });
+  this._btnJump.on("pointerout", () => { /* evita “pegado” */ touch.jump = false; });
+
+  positionTouchControls.call(this);
+}
+
+function positionTouchControls() {
+  // Medidas base UI (siempre en coords del canvas base)
+  const margin = 22;
+  const y = BASE_H - 70;
+
+  if (!this._btnLeft) return;
+
+  this._btnLeft.setPosition(70, y);
+  this._btnRight.setPosition(170, y);
+  this._btnJump.setPosition(BASE_W - 120, y);
 }
