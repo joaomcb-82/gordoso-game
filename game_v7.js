@@ -1,4 +1,3 @@
-alert("BUILD NUEVA: ESCENAS + FLECHAS");
 console.log("✅ GAME_V7 FINAL CARGADO (ESCENAS)");
 
 const BASE_W = 960;
@@ -47,9 +46,9 @@ class PlayScene extends Phaser.Scene {
 
     // Player
     this.player = this.physics.add.sprite(90, 420, "gordoso");
-    this.player.setScale(0.095);
+    this.player.setScale(0.055);
     this.player.setCollideWorldBounds(true);
-    this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.82, true);
+    this.player.body.setSize(this.player.width * 0.3, this.player.height * 0.5, true);
     this.physics.add.collider(this.player, this.platforms);
 
     // Controles: A/D + Flechas + W/Space + Flecha arriba
@@ -142,7 +141,7 @@ class PlayScene extends Phaser.Scene {
 
   makeSkunk(x, y, vx) {
     const s = this.physics.add.sprite(x, y, "skunk");
-    s.setScale(0.20);
+    s.setScale(0.40);
     s.setBounce(1);
     s.setCollideWorldBounds(true);
     s.setVelocityX(vx);
