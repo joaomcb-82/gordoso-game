@@ -46,9 +46,9 @@ class PlayScene extends Phaser.Scene {
 
     // Player
     this.player = this.physics.add.sprite(90, 420, "gordoso");
-    this.player.setScale(0.065);
+    this.player.setScale(0.085);
     this.player.setCollideWorldBounds(true);
-    this.player.body.setSize(this.player.width * 0.4, this.player.height * 0.6, true);
+    this.player.body.setSize(this.player.width * 0.5, this.player.height * 0.7, true);
     this.physics.add.collider(this.player, this.platforms);
 
     // Controles: A/D + Flechas + W/Space + Flecha arriba
