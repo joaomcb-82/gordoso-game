@@ -1,4 +1,4 @@
-console.log("GAME_V8 FINAL CARGADO OK");
+console.log("✅ GAME_V7 FINAL CARGADO");
 
 const BASE_W = 960;
 const BASE_H = 540;
@@ -10,7 +10,7 @@ const config = {
   parent: "game",
   backgroundColor: "#000000",
   scale: {
-    mode: Phaser.Scale.FIT,          // se adapta a la ventana
+    mode: Phaser.Scale.ENVELOP,     // LLENA la pantalla (recorta un poco si hace falta)
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   physics: {
@@ -24,8 +24,7 @@ new Phaser.Game(config);
 
 let player, cursors, keys;
 let platforms, burgers, skunks, door;
-let score = 0;
-let scoreText;
+let score = 0, scoreText;
 let ended = false;
 
 function preload() {
@@ -39,16 +38,16 @@ function preload() {
 }
 
 function create() {
-  // Fondo tipo cover sin deformar
+  // Fondo (cover sin deformar)
   const bg = this.add.image(BASE_W / 2, BASE_H / 2, "bg");
   const cover = Math.max(BASE_W / bg.width, BASE_H / bg.height);
   bg.setScale(cover);
 
-  // Plataforma visible (sin archivo)
+  // Plataforma (sin platform.png)
   const g = this.add.graphics();
-  g.fillStyle(0x111111, 0.85);
+  g.fillStyle(0x111111, 0.9);
   g.fillRoundedRect(0, 0, 260, 30, 10);
-  g.lineStyle(3, 0xffffff, 0.35);
+  g.lineStyle(3, 0xffffff, 0.25);
   g.strokeRoundedRect(0, 0, 260, 30, 10);
   g.generateTexture("plat", 260, 30);
   g.destroy();
@@ -58,14 +57,13 @@ function create() {
   platforms.create(250, 410, "plat").refreshBody();
   platforms.create(520, 330, "plat").refreshBody();
   platforms.create(780, 250, "plat").refreshBody();
-  platforms.create(900, 180, "plat").setScale(1.2, 1).refreshBody();          // plataforma final
+  platforms.create(900, 180, "plat").setScale(1.2, 1).refreshBody();
 
   // Gordoso proporcionado
   player = this.physics.add.sprite(90, 420, "gordoso");
   player.setScale(0.12);
   player.setCollideWorldBounds(true);
   player.body.setSize(player.width * 0.55, player.height * 0.82, true);
-
   this.physics.add.collider(player, platforms);
 
   // Controles PC
@@ -77,7 +75,7 @@ function create() {
     R: Phaser.Input.Keyboard.KeyCodes.R
   });
 
-  // Hamburguesas
+  // Hamburguesas (NOTA: si tu burger.png tiene fondo blanco, se verá blanco; eso es el archivo)
   burgers = this.physics.add.group({
     key: "burger",
     repeat: 6,
@@ -85,15 +83,19 @@ function create() {
   });
 
   burgers.children.iterate(b => {
-    b.setScale(0.11);
-    b.setBounce(0.25);
+    b.setScale(0.10);
+    b.setBounce(0.2);
     b.setCollideWorldBounds(true);
   });
 
   this.physics.add.collider(burgers, platforms);
-  this.physics.add.overlap(player, burgers, onBurger, null, this);
+  this.physics.add.overlap(player, burgers, (p, b) => {
+    b.disableBody(true, true);
+    score++;
+    scoreText.setText("🍔 " + score);
+  });
 
-  // Zorrillos (patrullan sobre suelo)
+  // Zorrillos que PATRULLAN (se mueven sí o sí)
   skunks = this.physics.add.group();
   makeSkunk(this, 520, 470, 180);
   makeSkunk(this, 720, 470, -180);
@@ -138,19 +140,13 @@ function update() {
     player.setVelocityY(-580);
   }
 
-  // Mantener a los zorrillos patrullando siempre (por si se quedan en 0)
+  // Anti-bug: si un zorrillo se queda sin velocidad, lo reimpulso
   skunks.children.iterate(s => {
-    if (!s || !s.body) return;
+    if (!s?.body) return;
     if (Math.abs(s.body.velocity.x) < 10) {
       s.setVelocityX(s.getData("dir") * 180);
     }
   });
-}
-
-function onBurger(player, burger) {
-  burger.disableBody(true, true);
-  score++;
-  scoreText.setText("🍔 " + score);
 }
 
 function makeSkunk(scene, x, y, vx) {
@@ -171,7 +167,6 @@ function endGame(win) {
   this.physics.pause();
   player.setVelocity(0, 0);
 
-  // Overlay
   this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
 
   if (!win) {
@@ -182,7 +177,7 @@ function endGame(win) {
     return;
   }
 
-  // ESCENA FINAL (mujer + bandera)
+  // FINAL: mujer + bandera
   this.add.text(BASE_W / 2, 90, "¡RESCATE LOGRADO! 🇹🇭", { fontSize: "38px", fill: "#fff" }).setOrigin(0.5);
   this.add.text(BASE_W / 2, 140, `Hamburguesas: ${score}`, { fontSize: "22px", fill: "#fff" }).setOrigin(0.5);
 
