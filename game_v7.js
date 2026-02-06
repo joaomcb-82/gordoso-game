@@ -1,127 +1,108 @@
-/* game.js — FINAL FIX (sin platform.png, gordoso más chico, zorrillos proporcionados sobre plataformas)
-   ✅ NO intenta cargar assets/platform.png (evita 404)
-   ✅ Plataformas con textura fallback (barra negra/verde) siempre
-   ✅ Gordoso (imagen) más chico y con hitbox correcta
-   ✅ Hamburguesas se “comen” siempre (hitbox = display size + disableBody)
-   ✅ Zorrillos visibles, proporcionados y puestos ENCIMA de plataformas
-   ✅ Cámara sigue a Gordoso + zoom dinámico para móvil/PC
-   ✅ Teclado + botones táctiles
+/* game.js — BASE GAMEPLAY (Level 1 ONLY)
+   - gordoso.png y skunk.png son IMÁGENES (no spritesheet)
+   - sin puerta / sin chica / sin nivel 2 (solo base estable)
 */
 
-class MainScene extends Phaser.Scene {
+class Level1 extends Phaser.Scene {
   constructor() {
-    super("MainScene");
+    super("Level1");
   }
 
   preload() {
-    // Rutas confirmadas por ti
+    // Assets confirmados en /assets
     this.load.image("bg", "assets/bangkok_bg.jpg");
     this.load.image("gordoso", "assets/gordoso.png");
-    this.load.image("burger", "assets/burger.png");
-    this.load.image("door", "assets/door.png");
-
-    // Si existe en assets, perfecto. Si no existe, no spawnea.
     this.load.image("skunk", "assets/skunk.png");
+    this.load.image("burger", "assets/burger.png");
   }
 
   create() {
-    // ===== Mundo =====
+    // ===== CONFIG NIVEL =====
     this.levelWidth = 2600;
     this.levelHeight = 720;
 
+    // Bounds del mundo
     this.physics.world.setBounds(0, 0, this.levelWidth, this.levelHeight);
 
-    // ===== Fondo =====
+    // Fondo (visual)
     this.bg = this.add.image(0, 0, "bg").setOrigin(0.5);
     this.bg.setScrollFactor(0);
     this.bg.setDepth(0);
 
-    // ===== Plataformas (SIN PNG externo) =====
-    this._makeFallbackPlatformTexture();
-    this.platformTextureKey = "platform_fallback";
+    // Plataformas: textura fallback (no depende de PNG)
+    this._makePlatformTexture();
     this.platforms = this.physics.add.staticGroup();
+    this.platformRects = []; // guardo datos para spawns “encima”
 
-    // Layout plataformas
     // Suelo
     this._addPlatform(0, this.levelHeight - 40, this.levelWidth, 30);
 
-    // Plataformas “parkour”
-    // (y = top de la plataforma; height = grosor)
+    // Plataformas (x, yTop, width, height)
     this._addPlatform(120, this.levelHeight - 170, 520, 22);
     this._addPlatform(520, this.levelHeight - 310, 520, 22);
     this._addPlatform(1040, this.levelHeight - 450, 760, 22);
     this._addPlatform(1700, this.levelHeight - 450, 760, 22);
 
-    // ===== Gordoso (imagen física) =====
+    // ===== PLAYER (GORDOSO) =====
     this.player = this.physics.add.image(140, this.levelHeight - 120, "gordoso");
     this.player.setDepth(100);
     this.player.setCollideWorldBounds(true);
 
-    // 🔽 TAMAÑO MÁS CHICO (ajusta aquí si lo quieres aún más chico)
-    this.player.setScale(0.28);
+    // 🔥 TAMAÑO GORDOSO (baja/sube aquí)
+    this.PLAYER_SCALE = 0.18;
+    this.player.setScale(this.PLAYER_SCALE);
 
-    // Hitbox: proporcional y estable (evita “fantasmas”)
-    this.player.body.setSize(
-      this.player.displayWidth * 0.55,
-      this.player.displayHeight * 0.78,
-      true
-    );
+    // Hitbox proporcional (no uses size “auto” del PNG)
+    this._setBodyToDisplay(this.player, 0.55, 0.78);
 
-    this.player.setDragX(1300);
+    // Movimiento
+    this.player.setDragX(1600);
     this.player.setMaxVelocity(360, 900);
     this.player.setBounce(0);
 
+    // Colisión con plataformas
     this.physics.add.collider(this.player, this.platforms);
 
-    // ===== Hamburguesas (coleccionables) =====
+    // ===== HAMBURGUESAS (coleccionables) =====
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
 
-    // 🔽 Tamaño de hamburguesa (ajusta aquí)
-    const burgerScale = 0.09;
+    // Tamaño burger
+    this.BURGER_SCALE = 0.075;
 
-    // Colocadas “encima” de plataformas (y = platformTop - offset)
-    this._spawnBurger(620, this._platformTopY(520, 22) - 26, burgerScale);   // sobre plataforma 2
-    this._spawnBurger(1340, this._platformTopY(1040, 22) - 26, burgerScale); // sobre plataforma 3
-    this._spawnBurger(1650, this._platformTopY(1700, 22) - 26, burgerScale); // sobre plataforma 4
+    // Spawns encima de plataformas (index 1..4 según creación)
+    this._spawnBurgerOnPlatform(2, 0.55); // plataforma 2
+    this._spawnBurgerOnPlatform(3, 0.45); // plataforma 3
+    this._spawnBurgerOnPlatform(4, 0.70); // plataforma 4
 
     this.score = 0;
     this.totalBurgers = this.burgers.getLength();
-    this.exitOpen = false;
 
-    // Overlap para recoger (robusto)
+    // Overlap robusto: tocar = recoger
     this.physics.add.overlap(this.player, this.burgers, (_p, burger) => {
       burger.disableBody(true, true);
       this.score++;
       this.scoreText.setText(`🍔 ${this.score}/${this.totalBurgers}`);
-      if (this.score >= this.totalBurgers) this._openExit();
     });
 
-    // ===== Zorrillos (enemigos) =====
-    this.skunkGroup = this.physics.add.group({ allowGravity: false, immovable: true });
+    // ===== ZORRILLOS (enemigos) =====
+    this.enemies = this.physics.add.group({
+      allowGravity: true
+    });
 
-    // 🔽 Tamaño zorrillo (ajusta aquí)
-    this.skunkScale = 0.20;
+    // Escala enemigos proporcional a Gordoso
+    this.SKUNK_SCALE = 0.14; // ajusta si los quieres un poco más grandes/pequeños
 
-    // Zorrillos posicionados ENCIMA de plataformas (con patrulla horizontal)
-    // (x, platformXStart, platformWidth, platformTopY)
-    this._spawnSkunkOnPlatform(360, 120, 520, this._platformTopY(120, 22));   // plataforma 1
-    this._spawnSkunkOnPlatform(760, 520, 520, this._platformTopY(520, 22));   // plataforma 2
-    this._spawnSkunkOnPlatform(2000, 1700, 760, this._platformTopY(1700, 22)); // plataforma 4
+    // Spawn sobre plataformas
+    this._spawnSkunkWalkerOnPlatform(1, 0.55); // plat 1
+    this._spawnSkunkWalkerOnPlatform(2, 0.25); // plat 2
+    this._spawnSkunkWalkerOnPlatform(4, 0.35); // plat 4
 
-    // Si choca con zorrillo => reinicia
-    this.physics.add.overlap(this.player, this.skunkGroup, () => {
+    // Para que CAMINEN sobre las plataformas (no floten)
+    this.physics.add.collider(this.enemies, this.platforms);
+
+    // Tocar enemigo = restart
+    this.physics.add.overlap(this.player, this.enemies, () => {
       this.scene.restart();
-    });
-
-    // ===== Puerta final =====
-    this.door = this.physics.add.staticImage(this.levelWidth - 160, this.levelHeight - 110, "door");
-    this.door.setDepth(120);
-    this.door.setScale(0.42);
-    this.door.setVisible(false);
-    this.door.body.enable = false;
-
-    this.physics.add.overlap(this.player, this.door, () => {
-      if (this.exitOpen) this._win();
     });
 
     // ===== UI =====
@@ -129,239 +110,82 @@ class MainScene extends Phaser.Scene {
       .text(16, 44, `🍔 0/${this.totalBurgers}`, {
         fontFamily: "Arial",
         fontSize: "18px",
-        color: "#ffffff",
+        color: "#fff",
         backgroundColor: "rgba(0,0,0,0.35)",
         padding: { x: 10, y: 6 }
       })
       .setScrollFactor(0)
-      .setDepth(1000);
+      .setDepth(999);
 
-    // ===== Cámara =====
+    // ===== CÁMARA =====
     this.cameras.main.setBounds(0, 0, this.levelWidth, this.levelHeight);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
 
-    // ===== Input teclado =====
+    // ===== INPUT =====
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
-    // ===== Touch =====
-    this.touch = { left: false, right: false, jump: false };
-    this._createTouchControls();
-
-    // ===== Resize + zoom =====
+    // ===== RESIZE SIMPLE (sin zoom raro) =====
     this.scale.on("resize", (gameSize) => {
       const { width, height } = gameSize;
-
       this.bg.setPosition(width / 2, height / 2);
       this._fitBackgroundToScreen(width, height);
-      this._applyCameraAndUIScale(width, height);
     });
 
-    // Inicial
     const w = this.scale.width;
     const h = this.scale.height;
     this.bg.setPosition(w / 2, h / 2);
     this._fitBackgroundToScreen(w, h);
-    this._applyCameraAndUIScale(w, h);
   }
 
   update() {
-    // Reiniciar
+    // Restart
     if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
       this.scene.restart();
       return;
     }
 
-    // Inputs
-    const left = this.cursors.left.isDown || this.keyA.isDown || this.touch.left;
-    const right = this.cursors.right.isDown || this.keyD.isDown || this.touch.right;
+    // Movimiento
+    const left = this.cursors.left.isDown || this.keyA.isDown;
+    const right = this.cursors.right.isDown || this.keyD.isDown;
 
     const jump =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-      Phaser.Input.Keyboard.JustDown(this.keyW) ||
-      this._consumeTouchJump();
+      Phaser.Input.Keyboard.JustDown(this.keyW);
 
-    // Movimiento
     if (left) {
-      this.player.setAccelerationX(-1400);
+      this.player.setAccelerationX(-1500);
       this.player.setFlipX(true);
     } else if (right) {
-      this.player.setAccelerationX(1400);
+      this.player.setAccelerationX(1500);
       this.player.setFlipX(false);
     } else {
       this.player.setAccelerationX(0);
     }
 
-    // Salto
     if (jump && this.player.body.onFloor()) {
       this.player.setVelocityY(-520);
     }
+
+    // Patrol enemigos
+    this._updateSkunks();
 
     // Safety fall
     if (this.player.y > this.levelHeight + 250) {
       this.player.setPosition(140, this.levelHeight - 120);
       this.player.setVelocity(0, 0);
     }
-
-    // Patrulla zorrillos
-    this._updateSkunks();
   }
 
-  // =========================================================
-  // Spawn helpers
-  // =========================================================
+  // ==============================
+  // HELPERS
+  // ==============================
 
-  _spawnBurger(x, y, scale) {
-    const b = this.burgers.create(x, y, "burger");
-    b.setDepth(90);
-    b.setScale(scale);
-
-    // Hitbox = tamaño visible (clavo para que se puedan comer)
-    b.body.setSize(b.displayWidth, b.displayHeight, true);
-
-    return b;
-  }
-
-  _spawnSkunkOnPlatform(x, platformXStart, platformWidth, platformTopY) {
-    if (!this.textures.exists("skunk")) return null;
-
-    const y = platformTopY - 18; // “encima” de la plataforma (ajusta si lo quieres más arriba)
-
-    const s = this.skunkGroup.create(x, y, "skunk");
-    s.setDepth(95);
-    s.setScale(this.skunkScale);
-
-    // Hitbox
-    s.body.setSize(s.displayWidth * 0.65, s.displayHeight * 0.65, true);
-
-    // Patrulla limitada dentro de la plataforma
-    const leftBound = platformXStart + 30;
-    const rightBound = platformXStart + platformWidth - 30;
-
-    s.patrol = {
-      leftBound,
-      rightBound,
-      speed: 55 + Math.random() * 20,
-      dir: Math.random() > 0.5 ? 1 : -1
-    };
-
-    // Start “mirando” a donde va
-    s.setFlipX(s.patrol.dir < 0);
-
-    return s;
-  }
-
-  _updateSkunks() {
-    if (!this.skunkGroup) return;
-
-    const dt = this.game.loop.delta / 1000;
-
-    this.skunkGroup.children.iterate((s) => {
-      if (!s || !s.active || !s.patrol) return;
-
-      s.x += s.patrol.dir * s.patrol.speed * dt;
-
-      if (s.x < s.patrol.leftBound) {
-        s.x = s.patrol.leftBound;
-        s.patrol.dir = 1;
-      } else if (s.x > s.patrol.rightBound) {
-        s.x = s.patrol.rightBound;
-        s.patrol.dir = -1;
-      }
-
-      s.setFlipX(s.patrol.dir < 0);
-    });
-  }
-
-  // =========================================================
-  // Door / Win
-  // =========================================================
-
-  _openExit() {
-    this.exitOpen = true;
-    this.door.setVisible(true);
-    this.door.body.enable = true;
-
-    if (!this.winHint) {
-      this.winHint = this.add
-        .text(16, 80, "✅ Puerta abierta → ve al final", {
-          fontFamily: "Arial",
-          fontSize: "18px",
-          color: "#ffffff",
-          backgroundColor: "rgba(0,0,0,0.35)",
-          padding: { x: 10, y: 6 }
-        })
-        .setScrollFactor(0)
-        .setDepth(1000);
-    }
-  }
-
-  _win() {
-    this.door.body.enable = false;
-
-    const w = this.scale.width;
-    const h = this.scale.height;
-
-    this.add
-      .rectangle(w / 2, h / 2, Math.min(520, w * 0.9), 220, 0x000000, 0.55)
-      .setScrollFactor(0)
-      .setDepth(2000);
-
-    this.add
-      .text(w / 2, h / 2, "🎉 ¡Ganaste!\nPresiona R para reiniciar", {
-        fontFamily: "Arial",
-        fontSize: "26px",
-        color: "#ffffff",
-        align: "center"
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-  }
-
-  // =========================================================
-  // Platform helpers
-  // =========================================================
-
-  _addPlatform(x, yTop, width, height) {
-    // yTop es la coordenada Y del BORDE SUPERIOR de la plataforma
-    const p = this.platforms.create(x + width / 2, yTop + height / 2, this.platformTextureKey);
-    p.setDisplaySize(width, height);
-    p.refreshBody();
-    return p;
-  }
-
-  _platformTopY(platformXStart, height) {
-    // Esta función NO depende de X realmente; la dejo para mantener claridad.
-    // En nuestro layout, calculamos yTop directamente cuando agregamos plataformas.
-    // Aquí devolvemos valores “manuales” consistentes con create().
-
-    // NOTA: como no guardamos objetos de plataforma por referencia, usamos las mismas fórmulas:
-    // Plataforma 2 yTop = levelHeight - 310
-    // Plataforma 3 yTop = levelHeight - 450
-    // Plataforma 4 yTop = levelHeight - 450
-
-    // Para los calls que hice:
-    // _platformTopY(520,22)  -> levelHeight - 310
-    // _platformTopY(1040,22) -> levelHeight - 450
-    // _platformTopY(1700,22) -> levelHeight - 450
-    // _platformTopY(120,22) -> levelHeight - 170
-
-    if (platformXStart === 120) return this.levelHeight - 170;
-    if (platformXStart === 520) return this.levelHeight - 310;
-    if (platformXStart === 1040) return this.levelHeight - 450;
-    if (platformXStart === 1700) return this.levelHeight - 450;
-
-    // fallback razonable
-    return this.levelHeight - 310;
-  }
-
-  _makeFallbackPlatformTexture() {
-    // Barra negra con línea verde (como tus plataformas actuales)
+  _makePlatformTexture() {
     const g = this.add.graphics();
     g.fillStyle(0x101010, 1);
     g.fillRoundedRect(0, 0, 512, 48, 18);
@@ -371,9 +195,99 @@ class MainScene extends Phaser.Scene {
     g.destroy();
   }
 
-  // =========================================================
-  // Resize helpers
-  // =========================================================
+  _addPlatform(x, yTop, width, height) {
+    const p = this.platforms.create(x + width / 2, yTop + height / 2, "platform_fallback");
+    p.setDisplaySize(width, height);
+    p.refreshBody();
+
+    // Guarda rect para spawns encima
+    this.platformRects.push({
+      x,
+      yTop,
+      width,
+      height,
+      left: x,
+      right: x + width,
+      top: yTop
+    });
+
+    return p;
+  }
+
+  _spawnBurgerOnPlatform(platformIndex1Based, xRatio = 0.5) {
+    const plat = this.platformRects[platformIndex1Based - 1];
+    if (!plat) return;
+
+    const x = plat.left + plat.width * xRatio;
+    const y = plat.top - 26; // encima
+
+    const b = this.burgers.create(x, y, "burger");
+    b.setDepth(90);
+    b.setScale(this.BURGER_SCALE);
+
+    // Hitbox = lo que se ve
+    b.body.setSize(b.displayWidth, b.displayHeight, true);
+
+    return b;
+  }
+
+  _spawnSkunkWalkerOnPlatform(platformIndex1Based, xRatio = 0.5) {
+    const plat = this.platformRects[platformIndex1Based - 1];
+    if (!plat) return;
+
+    const x = plat.left + plat.width * xRatio;
+
+    // Y de spawn: un poco arriba; la gravedad lo hace caer y el collider lo “asienta”
+    const y = plat.top - 120;
+
+    const s = this.enemies.create(x, y, "skunk");
+    s.setDepth(95);
+    s.setScale(this.SKUNK_SCALE);
+
+    // hitbox
+    this._setBodyToDisplay(s, 0.65, 0.70);
+
+    // patrol bounds dentro de la plataforma
+    s.patrol = {
+      left: plat.left + 25,
+      right: plat.right - 25,
+      speed: 70,   // velocidad caminar
+      dir: Math.random() > 0.5 ? 1 : -1
+    };
+
+    // Para que no se “patine” raro
+    s.setDragX(0);
+    s.setMaxVelocity(120, 900);
+
+    return s;
+  }
+
+  _updateSkunks() {
+    const dt = this.game.loop.delta / 1000;
+
+    this.enemies.children.iterate((s) => {
+      if (!s || !s.active || !s.patrol) return;
+
+      // Solo mueve si ya está apoyado (evita “volar” en caída)
+      if (!s.body.onFloor()) return;
+
+      s.setVelocityX(s.patrol.dir * s.patrol.speed);
+
+      if (s.x < s.patrol.left) {
+        s.x = s.patrol.left;
+        s.patrol.dir = 1;
+      } else if (s.x > s.patrol.right) {
+        s.x = s.patrol.right;
+        s.patrol.dir = -1;
+      }
+
+      s.setFlipX(s.patrol.dir < 0);
+    });
+  }
+
+  _setBodyToDisplay(obj, wFactor = 1, hFactor = 1) {
+    obj.body.setSize(obj.displayWidth * wFactor, obj.displayHeight * hFactor, true);
+  }
 
   _fitBackgroundToScreen(screenW, screenH) {
     const tex = this.textures.get("bg");
@@ -382,86 +296,12 @@ class MainScene extends Phaser.Scene {
     const imgW = tex.getSourceImage().width;
     const imgH = tex.getSourceImage().height;
 
-    // Cover
     const scale = Math.max(screenW / imgW, screenH / imgH);
     this.bg.setScale(scale);
   }
-
-  _applyCameraAndUIScale(w, h) {
-    // Base “diseño” para evitar gigantismo en móvil
-    const baseW = 960;
-    const baseH = 540;
-
-    const zoom = Math.min(w / baseW, h / baseH);
-    this.cameras.main.setZoom(zoom);
-
-    if (this.scoreText) this.scoreText.setPosition(16, 44);
-    this._layoutTouchControls(w, h);
-  }
-
-  // =========================================================
-  // Touch controls
-  // =========================================================
-
-  _createTouchControls() {
-    this.btns = {};
-
-    const makeBtn = (label) => {
-      const c = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
-      const bg = this.add.circle(0, 0, 34, 0x000000, 0.35);
-      const tx = this.add.text(0, 0, label, {
-        fontFamily: "Arial",
-        fontSize: "22px",
-        color: "#ffffff"
-      }).setOrigin(0.5);
-      c.add([bg, tx]);
-      c.setSize(80, 80);
-      c.setInteractive(new Phaser.Geom.Circle(0, 0, 40), Phaser.Geom.Circle.Contains);
-      return c;
-    };
-
-    this.btns.left = makeBtn("◀");
-    this.btns.right = makeBtn("▶");
-    this.btns.jump = makeBtn("⤒");
-
-    this.btns.left.on("pointerdown", () => (this.touch.left = true));
-    this.btns.left.on("pointerup", () => (this.touch.left = false));
-    this.btns.left.on("pointerout", () => (this.touch.left = false));
-
-    this.btns.right.on("pointerdown", () => (this.touch.right = true));
-    this.btns.right.on("pointerup", () => (this.touch.right = false));
-    this.btns.right.on("pointerout", () => (this.touch.right = false));
-
-    this.btns.jump.on("pointerdown", () => (this.touch.jump = true));
-    this.btns.jump.on("pointerup", () => (this.touch.jump = false));
-    this.btns.jump.on("pointerout", () => (this.touch.jump = false));
-  }
-
-  _layoutTouchControls(w, h) {
-    if (!this.btns) return;
-    const m = 60;
-
-    this.btns.left.setPosition(m, h - m);
-    this.btns.right.setPosition(m + 90, h - m);
-    this.btns.jump.setPosition(w - m, h - m);
-
-    if (h < 420) {
-      this.btns.left.y = h - 50;
-      this.btns.right.y = h - 50;
-      this.btns.jump.y = h - 50;
-    }
-  }
-
-  _consumeTouchJump() {
-    if (this.touch.jump) {
-      this.touch.jump = false;
-      return true;
-    }
-    return false;
-  }
 }
 
-// ===== Config =====
+// ===== CONFIG =====
 const config = {
   type: Phaser.AUTO,
   parent: "game",
@@ -474,7 +314,7 @@ const config = {
     default: "arcade",
     arcade: { gravity: { y: 900 }, debug: false }
   },
-  scene: [MainScene]
+  scene: [Level1]
 };
 
 new Phaser.Game(config);
