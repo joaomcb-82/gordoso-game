@@ -118,7 +118,7 @@
         .refreshBody();
 
       // Plataformas principales (como las negras que ya usas)
-      const p1 = this.platforms.create(360, 520, null).setDisplaySize(520, 30).refreshBody();
+      const p1 = this.platforms.create(360, 320, null).setDisplaySize(520, 30).refreshBody();
       const p2 = this.platforms.create(680, 380, null).setDisplaySize(520, 30).refreshBody();
       const p3 = this.platforms.create(980, 250, null).setDisplaySize(520, 30).refreshBody();
 
