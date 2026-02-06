@@ -67,7 +67,7 @@ class Level1 extends Phaser.Scene {
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
 
     // Tamaño burger
-    this.BURGER_SCALE = 0.075;
+    this.BURGER_SCALE = 0.095;
 
     // Spawns encima de plataformas (index 1..4 según creación)
     this._spawnBurgerOnPlatform(2, 0.55); // plataforma 2
@@ -90,7 +90,7 @@ class Level1 extends Phaser.Scene {
     });
 
     // Escala enemigos proporcional a Gordoso
-    this.SKUNK_SCALE = 0.14; // ajusta si los quieres un poco más grandes/pequeños
+    this.SKUNK_SCALE = 0.16; // ajusta si los quieres un poco más grandes/pequeños
 
     // Spawn sobre plataformas
     this._spawnSkunkWalkerOnPlatform(1, 0.55); // plat 1
