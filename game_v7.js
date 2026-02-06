@@ -1,3 +1,4 @@
+alert("CARGO CODE_02");
 console.log("✅ GORDOSO GAME V7 - LEVEL 2 BUILD LOADED");
 
 const BASE_W = 960;
