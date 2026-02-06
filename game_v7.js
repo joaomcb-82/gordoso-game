@@ -1,4 +1,4 @@
-console.log("✅ GAME_V7 FINAL CARGADO (ESCENAS) — PUERTA SIEMPRE + PISAR FIX");
+console.log("✅ GAME_V7 FINAL CARGADO (ESCENAS) — ZORRILLOS MÁS GRANDES");
 
 const BASE_W = 960;
 const BASE_H = 540;
@@ -22,12 +22,12 @@ class PlayScene extends Phaser.Scene {
     this.score = 0;
     this.ended = false;
 
-    // ===== Fondo (cover) =====
+    // ===== Fondo =====
     const bg = this.add.image(BASE_W / 2, BASE_H / 2, "bg");
     const cover = Math.max(BASE_W / bg.width, BASE_H / bg.height);
     bg.setScale(cover);
 
-    // ===== Textura plataforma (sin platform.png) =====
+    // ===== Textura plataforma =====
     const g = this.add.graphics();
     g.fillStyle(0x111111, 0.92);
     g.fillRoundedRect(0, 0, 260, 30, 10);
@@ -47,30 +47,24 @@ class PlayScene extends Phaser.Scene {
     const p3 = this.platforms.create(780, 250, "plat"); p3.refreshBody();
     const p4 = this.platforms.create(900, 180, "plat").setScale(1.2, 1); p4.refreshBody();
 
-    // Bounds útiles
-    const boundsFrom = (platSprite) => {
-      const b = platSprite.getBounds();
-      return { left: b.left + 18, right: b.right - 18, top: b.top };
+    const boundsFrom = (plat) => {
+      const b = plat.getBounds();
+      return { left: b.left + 18, right: b.right - 18 };
     };
+
     const bGround = boundsFrom(ground);
     const bP2 = boundsFrom(p2);
 
-    // ===== Player (Gordoso) =====
+    // ===== Gordoso =====
     this.player = this.physics.add.sprite(90, 420, "gordoso");
-
-    // ✅ “pisar” mejor: origen hacia los pies
     this.player.setOrigin(0.5, 0.88);
-
-    // ✅ Gordoso más chico
     this.player.setScale(0.10);
-
     this.player.setCollideWorldBounds(true);
 
-    // ✅ Hitbox pegada a los pies
-    const bw = this.player.width * 0.45;
-    const bh = this.player.height * 0.55;
-    this.player.body.setSize(bw, bh);
-    this.player.body.setOffset((this.player.width - bw) / 2, this.player.height - bh);
+    const pw = this.player.width * 0.45;
+    const ph = this.player.height * 0.55;
+    this.player.body.setSize(pw, ph);
+    this.player.body.setOffset((this.player.width - pw) / 2, this.player.height - ph);
 
     this.physics.add.collider(this.player, this.platforms);
 
@@ -83,7 +77,7 @@ class PlayScene extends Phaser.Scene {
       R: Phaser.Input.Keyboard.KeyCodes.R
     });
 
-    // ===== Hamburguesas (SOLO PUNTOS) =====
+    // ===== Hamburguesas (solo puntos) =====
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
 
     const makeBurger = (x, y) => {
@@ -93,7 +87,6 @@ class PlayScene extends Phaser.Scene {
       return b;
     };
 
-    // Puedes poner las que quieras; aquí 6 por ejemplo
     makeBurger(200, 380);
     makeBurger(320, 380);
     makeBurger(520, 300);
@@ -107,28 +100,18 @@ class PlayScene extends Phaser.Scene {
       this.scoreText.setText("🍔 " + this.score);
     });
 
-    // ===== Zorrillos caminando (SIN rebote) =====
+    // ===== ZORRILLOS (MÁS GRANDES) =====
     this.skunks = this.physics.add.group();
 
-    // 1) suelo
     this.makeSkunkWalker(420, 470, bGround.left, bGround.right, 160);
-
-    // 2) plataforma media
-    this.makeSkunkWalker(520, 0, bP2.left, bP2.right, 140); // cae sobre plataforma
+    this.makeSkunkWalker(520, 0, bP2.left, bP2.right, 140);
 
     this.physics.add.collider(this.skunks, this.platforms);
-
-    // Tocar zorrillo = game over
     this.physics.add.overlap(this.player, this.skunks, () => this.gameOver(), null, this);
 
-    // ===== Puerta final (SIEMPRE) =====
+    // ===== Puerta =====
     this.door = this.physics.add.staticImage(930, 120, "door").setScale(0.16);
     this.door.refreshBody();
-
-    // Visible y activa desde el inicio
-    this.door.setVisible(true);
-    this.door.body.enable = true;
-
     this.physics.add.overlap(this.player, this.door, () => this.win(), null, this);
 
     // ===== UI =====
@@ -167,47 +150,32 @@ class PlayScene extends Phaser.Scene {
       this.player.setVelocityY(-580);
     }
 
-    // Patrulla zorrillos (solo si pisan)
     this.skunks.children.iterate((s) => {
-      if (!s?.body || !s.getData("patrol")) return;
-      if (!s.body.blocked.down) return;
-
-      const leftBound = s.getData("left");
-      const rightBound = s.getData("right");
-      let dir = s.getData("dir");
-      const speed = s.getData("speed");
-
-      s.setVelocityX(dir * speed);
-
-      if (s.x < leftBound) {
-        s.x = leftBound;
-        dir = 1;
-      } else if (s.x > rightBound) {
-        s.x = rightBound;
-        dir = -1;
-      }
-
-      s.setData("dir", dir);
-      s.setFlipX(dir < 0);
+      if (!s?.body) return;
+      const dir = s.getData("dir");
+      s.setVelocityX(dir * s.getData("speed"));
+      if (s.x < s.getData("left")) s.setData("dir", 1);
+      if (s.x > s.getData("right")) s.setData("dir", -1);
+      s.setFlipX(s.getData("dir") < 0);
     });
   }
 
+  // 🔥 FUNCIÓN CLAVE — ZORRILLOS GRANDES
   makeSkunkWalker(x, y, leftBound, rightBound, speed) {
     const s = this.physics.add.sprite(x, y, "skunk");
-    s.setScale(0.12);
 
-    // ✅ sin rebote (no pelota)
+    // 👉 MÁS GRANDES AQUÍ
+    s.setScale(0.16);
+
+    s.setOrigin(0.5, 0.95);
     s.setBounce(0);
-
     s.setCollideWorldBounds(true);
 
-    // hitbox decente
-    const bw = s.width * 0.7;
-    const bh = s.height * 0.7;
-    s.body.setSize(bw, bh, true);
+    const bw = s.width * 0.65;
+    const bh = s.height * 0.65;
+    s.body.setSize(bw, bh);
+    s.body.setOffset((s.width - bw) / 2, s.height - bh);
 
-    // Patrol data
-    s.setData("patrol", true);
     s.setData("left", leftBound);
     s.setData("right", rightBound);
     s.setData("speed", speed);
@@ -244,10 +212,6 @@ class FinalRoomScene extends Phaser.Scene {
     const score = data?.score ?? 0;
 
     this.cameras.main.setBackgroundColor("#1b1b1b");
-    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x2a2a2a, 1).setStrokeStyle(6, 0x111111, 1);
-
-    this.add.circle(BASE_W / 2, 120, 55, 0xffe08a, 0.18);
-    this.add.circle(BASE_W / 2, 120, 28, 0xffe08a, 0.25);
 
     this.add.text(BASE_W / 2, 70, "¡RESCATE LOGRADO! 🇹🇭", {
       fontSize: "40px",
@@ -290,4 +254,3 @@ const config = {
 };
 
 new Phaser.Game(config);
-
