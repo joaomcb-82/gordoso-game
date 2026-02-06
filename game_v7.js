@@ -1,4 +1,4 @@
-console.log("✅ GAME_V7 — NIVEL 1 + NIVEL 2 (PUERTA) + SUBFINAL N2 + CORTINA");
+console.log("✅ GAME_V7 — NIVEL 1 + NIVEL 2 + SUBFINALES + RESTART POR NIVEL + AUTO WALK");
 
 const BASE_W = 960;
 const BASE_H = 540;
@@ -25,10 +25,12 @@ class PlayScene extends Phaser.Scene {
     this.score = 0;
     this.ended = false;
 
+    // Fondo (cover)
     const bg = this.add.image(BASE_W / 2, BASE_H / 2, "bg");
     const cover = Math.max(BASE_W / bg.width, BASE_H / bg.height);
     bg.setScale(cover);
 
+    // Textura plataforma
     const g = this.add.graphics();
     g.fillStyle(0x111111, 0.92);
     g.fillRoundedRect(0, 0, 260, 30, 10);
@@ -37,6 +39,7 @@ class PlayScene extends Phaser.Scene {
     g.generateTexture("plat", 260, 30);
     g.destroy();
 
+    // Plataformas
     this.platforms = this.physics.add.staticGroup();
 
     const ground = this.platforms.create(BASE_W / 2, 520, "plat").setScale(4.2, 1.5);
@@ -47,6 +50,7 @@ class PlayScene extends Phaser.Scene {
     const p3 = this.platforms.create(780, 250, "plat"); p3.refreshBody();
     const p4 = this.platforms.create(900, 180, "plat").setScale(1.2, 1); p4.refreshBody();
 
+    // Bounds útiles para zorrillos
     const boundsFrom = (plat) => {
       const b = plat.getBounds();
       return { left: b.left + 18, right: b.right - 18 };
@@ -54,6 +58,7 @@ class PlayScene extends Phaser.Scene {
     const bGround = boundsFrom(ground);
     const bP2 = boundsFrom(p2);
 
+    // Gordoso
     this.player = this.physics.add.sprite(90, 420, "gordoso");
     this.player.setOrigin(0.5, 0.88);
     this.player.setScale(0.10);
@@ -66,6 +71,7 @@ class PlayScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.platforms);
 
+    // Controles
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys({
       A: Phaser.Input.Keyboard.KeyCodes.A,
@@ -74,7 +80,9 @@ class PlayScene extends Phaser.Scene {
       R: Phaser.Input.Keyboard.KeyCodes.R
     });
 
+    // Hamburguesas (solo puntos)
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
+
     const makeBurger = (x, y) => {
       const b = this.burgers.create(x, y, "burger");
       b.setScale(0.09);
@@ -95,6 +103,7 @@ class PlayScene extends Phaser.Scene {
       this.scoreText.setText("🍔 " + this.score);
     });
 
+    // Zorrillos
     this.skunks = this.physics.add.group();
     this.makeSkunkWalker(420, 470, bGround.left, bGround.right, 160);
     this.makeSkunkWalker(520, 0, bP2.left, bP2.right, 140);
@@ -102,10 +111,12 @@ class PlayScene extends Phaser.Scene {
     this.physics.add.collider(this.skunks, this.platforms);
     this.physics.add.overlap(this.player, this.skunks, () => this.gameOver(), null, this);
 
+    // Puerta Nivel 1
     this.door = this.physics.add.staticImage(930, 120, "door").setScale(0.16);
     this.door.refreshBody();
     this.physics.add.overlap(this.player, this.door, () => this.win(), null, this);
 
+    // UI
     this.scoreText = this.add.text(14, 14, "🍔 0", {
       fontSize: "18px",
       fill: "#111",
@@ -122,10 +133,7 @@ class PlayScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.ended) {
-      if (this.keys.R.isDown) window.location.reload();
-      return;
-    }
+    if (this.ended) return;
 
     const left = this.keys.A.isDown || this.cursors.left.isDown;
     const right = this.keys.D.isDown || this.cursors.right.isDown;
@@ -136,7 +144,6 @@ class PlayScene extends Phaser.Scene {
 
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     const jumpPressed = this.keys.W.isDown || this.cursors.space.isDown || this.cursors.up.isDown;
-
     if (jumpPressed && onGround) this.player.setVelocityY(-580);
 
     this.skunks.children.iterate((s) => {
@@ -169,6 +176,7 @@ class PlayScene extends Phaser.Scene {
     this.skunks.add(s);
   }
 
+  // ✅ Reinicia en Nivel 1
   gameOver() {
     if (this.ended) return;
     this.ended = true;
@@ -178,7 +186,9 @@ class PlayScene extends Phaser.Scene {
     this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
     this.add.text(BASE_W / 2, 115, "GAME OVER", { fontSize: "44px", fill: "#fff" }).setOrigin(0.5);
     this.add.text(BASE_W / 2, 165, "Te atrapó Toxin 😵", { fontSize: "20px", fill: "#fff" }).setOrigin(0.5);
-    this.add.text(BASE_W / 2, 210, "Presiona R para reiniciar", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 210, "Reiniciando Nivel 1...", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
+
+    this.time.delayedCall(900, () => this.scene.restart());
   }
 
   win() {
@@ -200,7 +210,8 @@ class FinalRoomScene extends Phaser.Scene {
     const score = data?.score ?? 0;
 
     this.cameras.main.setBackgroundColor("#1b1b1b");
-    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x2a2a2a, 1).setStrokeStyle(6, 0x111111, 1);
+    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x2a2a2a, 1)
+      .setStrokeStyle(6, 0x111111, 1);
 
     this.add.circle(BASE_W / 2, 120, 55, 0xffe08a, 0.18);
     this.add.circle(BASE_W / 2, 120, 28, 0xffe08a, 0.25);
@@ -215,7 +226,7 @@ class FinalRoomScene extends Phaser.Scene {
     this.add.text(BASE_W / 2, 470, "Presiona R para reiniciar", { fontSize: "18px", fill: "#ffffff" }).setOrigin(0.5);
     this.input.keyboard.on("keydown-R", () => window.location.reload());
 
-    // Puente a Nivel 2 (sin agregar texto)
+    // Puente a Nivel 2
     this.time.delayedCall(1500, () => {
       this.cameras.main.fadeOut(350, 0, 0, 0);
       this.time.delayedCall(380, () => {
@@ -226,7 +237,7 @@ class FinalRoomScene extends Phaser.Scene {
 }
 
 // ============================
-// NIVEL 2 (termina en PUERTA)
+// NIVEL 2 (termina en puerta)
 // ============================
 class Level2Scene extends Phaser.Scene {
   constructor() {
@@ -242,6 +253,7 @@ class Level2Scene extends Phaser.Scene {
     const cover = Math.max(BASE_W / bg.width, BASE_H / bg.height);
     bg.setScale(cover);
 
+    // Si entran directo a nivel2, asegurar textura plat
     if (!this.textures.exists("plat")) {
       const g = this.add.graphics();
       g.fillStyle(0x111111, 0.92);
@@ -271,7 +283,7 @@ class Level2Scene extends Phaser.Scene {
     const bB = boundsFrom(b);
     const bC = boundsFrom(c);
 
-    // Player
+    // Gordoso
     this.player = this.physics.add.sprite(80, 420, "gordoso");
     this.player.setOrigin(0.5, 0.88);
     this.player.setScale(0.10);
@@ -293,7 +305,7 @@ class Level2Scene extends Phaser.Scene {
       R: Phaser.Input.Keyboard.KeyCodes.R
     });
 
-    // Burgers (solo puntos)
+    // Hamburguesas
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
     const makeBurger = (x, y) => {
       const bb2 = this.burgers.create(x, y, "burger");
@@ -322,7 +334,7 @@ class Level2Scene extends Phaser.Scene {
     this.physics.add.collider(this.skunks, this.platforms);
     this.physics.add.overlap(this.player, this.skunks, () => this.gameOver(), null, this);
 
-    // ✅ PUERTA al final del Nivel 2 (no chica aquí)
+    // Puerta Nivel 2
     this.door2 = this.physics.add.staticImage(910, 165, "door").setScale(0.16);
     this.door2.refreshBody();
     this.physics.add.overlap(this.player, this.door2, () => this.level2Door(), null, this);
@@ -344,10 +356,7 @@ class Level2Scene extends Phaser.Scene {
   }
 
   update() {
-    if (this.ended) {
-      if (this.keys.R.isDown) window.location.reload();
-      return;
-    }
+    if (this.ended) return;
 
     const left = this.keys.A.isDown || this.cursors.left.isDown;
     const right = this.keys.D.isDown || this.cursors.right.isDown;
@@ -358,7 +367,6 @@ class Level2Scene extends Phaser.Scene {
 
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     const jumpPressed = this.keys.W.isDown || this.cursors.space.isDown || this.cursors.up.isDown;
-
     if (jumpPressed && onGround) this.player.setVelocityY(-580);
 
     this.skunks.children.iterate((s) => {
@@ -391,6 +399,7 @@ class Level2Scene extends Phaser.Scene {
     this.skunks.add(s);
   }
 
+  // ✅ Reinicia en Nivel 2 (con carryScore intacto)
   gameOver() {
     if (this.ended) return;
     this.ended = true;
@@ -400,22 +409,23 @@ class Level2Scene extends Phaser.Scene {
     this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
     this.add.text(BASE_W / 2, 115, "GAME OVER", { fontSize: "44px", fill: "#fff" }).setOrigin(0.5);
     this.add.text(BASE_W / 2, 165, "Te atrapó Toxin 😵", { fontSize: "20px", fill: "#fff" }).setOrigin(0.5);
-    this.add.text(BASE_W / 2, 210, "Presiona R para reiniciar", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 210, "Reiniciando Nivel 2...", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
+
+    const carry = this.carryScore ?? 0;
+    this.time.delayedCall(900, () => this.scene.restart({ carryScore: carry }));
   }
 
   level2Door() {
     if (this.ended) return;
     this.ended = true;
     this.physics.pause();
-    const total = this.carryScore + this.score2;
-
-    // ✅ entra a la habitación del subfinal Nivel 2
+    const total = (this.carryScore ?? 0) + (this.score2 ?? 0);
     this.scene.start("finalRoom2", { totalScore: total });
   }
 }
 
 // ============================
-// SUBFINAL NIVEL 2 (habitación) -> tocar chica -> cortina
+// SUBFINAL NIVEL 2 (habitación) + AUTO WALK
 // ============================
 class FinalRoom2Scene extends Phaser.Scene {
   constructor() {
@@ -426,81 +436,54 @@ class FinalRoom2Scene extends Phaser.Scene {
     const totalScore = data?.totalScore ?? 0;
     this.totalScore = totalScore;
 
-    // Habitación simple
+    // Habitación
     this.cameras.main.setBackgroundColor("#111111");
-    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x222222, 1).setStrokeStyle(6, 0x000000, 0.8);
+    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x222222, 1)
+      .setStrokeStyle(6, 0x000000, 0.8);
 
-    // “Luz”
+    // Luz
     this.add.circle(BASE_W / 2, 120, 60, 0xffd27d, 0.18);
     this.add.circle(BASE_W / 2, 120, 30, 0xffd27d, 0.25);
 
-    // Texto mínimo
-    this.add.text(BASE_W / 2, 70, "SUBFINAL — NIVEL 2", {
-      fontSize: "34px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 60, "SUBFINAL — NIVEL 2", { fontSize: "34px", fill: "#ffffff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 105, `Puntaje total: ${totalScore}`, { fontSize: "20px", fill: "#ffffff" }).setOrigin(0.5);
 
-    this.add.text(BASE_W / 2, 115, `Puntaje total: ${totalScore}`, {
-      fontSize: "20px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
+    // ✅ Suelo invisible sin cuadro verde
+    const floorRect = this.add.rectangle(BASE_W / 2, 500, BASE_W, 60, 0x000000, 0);
+    this.physics.add.existing(floorRect, true); // static body
 
-    // Gordoso y chica dentro de la habitación
-    this.player = this.physics.add.sprite(260, 380, "gordoso").setScale(0.14);
+    // Gordoso (más arriba para verse completo)
+    this.player = this.physics.add.sprite(240, 430, "gordoso").setScale(0.14);
     this.player.setOrigin(0.5, 0.88);
+    this.player.setCollideWorldBounds(true);
+    this.physics.add.collider(this.player, floorRect);
 
-    // Suelo invisible en la habitación
-    const floor = this.physics.add.staticImage(BASE_W / 2, 480, null);
-    floor.setSize(BASE_W, 40);
-    floor.refreshBody();
-
-    this.player.body.setCollideWorldBounds(true);
-    this.physics.add.collider(this.player, floor);
-
-    // hitbox gordoso (habitacion)
     const pw = this.player.width * 0.45;
     const ph = this.player.height * 0.55;
     this.player.body.setSize(pw, ph);
     this.player.body.setOffset((this.player.width - pw) / 2, this.player.height - ph);
 
-    // Chica estática (objetivo)
-    this.girl = this.physics.add.staticImage(700, 380, "girl").setScale(0.26);
+    // Chica
+    this.girl = this.physics.add.staticImage(720, 430, "girl").setScale(0.26);
     this.girl.refreshBody();
 
-    // Controles en la habitación
-    this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys({
-      A: Phaser.Input.Keyboard.KeyCodes.A,
-      D: Phaser.Input.Keyboard.KeyCodes.D,
-      W: Phaser.Input.Keyboard.KeyCodes.W,
-      R: Phaser.Input.Keyboard.KeyCodes.R
-    });
+    // ✅ Auto caminar hacia la chica
+    this.autoWalk = true;
+    this.player.setVelocityX(170);
 
-    this.add.text(BASE_W / 2, 505, "Acércate a la chica • R reinicia", {
-      fontSize: "16px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
-
-    // tocar chica -> cortina
     this.physics.add.overlap(this.player, this.girl, () => {
+      if (!this.autoWalk) return;
+      this.autoWalk = false;
+      this.player.setVelocityX(0);
       this.scene.start("curtain", { totalScore: this.totalScore });
     });
 
-    // R reinicia
+    // R reinicia (se mantiene)
     this.input.keyboard.on("keydown-R", () => window.location.reload());
   }
 
   update() {
-    const left = this.keys.A.isDown || this.cursors.left.isDown;
-    const right = this.keys.D.isDown || this.cursors.right.isDown;
-
-    if (left) this.player.setVelocityX(-220);
-    else if (right) this.player.setVelocityX(220);
-    else this.player.setVelocityX(0);
-
-    const onGround = this.player.body.blocked.down || this.player.body.touching.down;
-    const jumpPressed = this.keys.W.isDown || this.cursors.space.isDown || this.cursors.up.isDown;
-    if (jumpPressed && onGround) this.player.setVelocityY(-520);
+    // ✅ Sin controles aquí (solo auto-walk)
   }
 }
 
@@ -516,18 +499,10 @@ class CurtainScene extends Phaser.Scene {
     const totalScore = data?.totalScore ?? 0;
 
     this.cameras.main.setBackgroundColor("#120006");
-
     this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
 
-    this.add.text(BASE_W / 2, 80, "ESCENA CENSURADA", {
-      fontSize: "40px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
-
-    this.add.text(BASE_W / 2, 130, `Puntaje total: ${totalScore}`, {
-      fontSize: "22px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 80, "ESCENA CENSURADA", { fontSize: "40px", fill: "#ffffff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 130, `Puntaje total: ${totalScore}`, { fontSize: "22px", fill: "#ffffff" }).setOrigin(0.5);
 
     const leftCurtain = this.add.rectangle(-BASE_W * 0.25, BASE_H / 2, BASE_W * 0.55, BASE_H, 0x8b0016, 1);
     const rightCurtain = this.add.rectangle(BASE_W * 1.25, BASE_H / 2, BASE_W * 0.55, BASE_H, 0x8b0016, 1);
@@ -547,7 +522,7 @@ class CurtainScene extends Phaser.Scene {
       hearts.push(t);
     }
 
-    const behind = this.add.text(BASE_W / 2, BASE_H / 2, "…\n(Mmmmm Travas - ruidos sospechosos - Take Take)\n…", {
+    const behind = this.add.text(BASE_W / 2, BASE_H / 2, "…\n(ruidos sospechosos)\n…", {
       fontSize: "28px",
       fill: "#ffd6e0",
       align: "center"
@@ -591,11 +566,7 @@ class CurtainScene extends Phaser.Scene {
       }
     });
 
-    this.add.text(BASE_W / 2, 490, "Presiona R para reiniciar", {
-      fontSize: "18px",
-      fill: "#ffffff"
-    }).setOrigin(0.5);
-
+    this.add.text(BASE_W / 2, 490, "Presiona R para reiniciar", { fontSize: "18px", fill: "#ffffff" }).setOrigin(0.5);
     this.input.keyboard.on("keydown-R", () => window.location.reload());
   }
 }
