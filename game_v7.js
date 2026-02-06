@@ -1,9 +1,13 @@
-/* game.js — VERSION RESIZE + FIXES (PC + móvil)
-   - Canvas ocupa 100vw/100vh (con CSS en index.html)
-   - Phaser Scale: RESIZE + autocenter
-   - Mundo con bounds/cámara estables
-   - Controles: A/D o Flechas, salto: W o Espacio, R reinicia
-   - Botones táctiles (izq/der/saltar) opcionales y responsivos
+/* game.js — COMPLETO (RESIZE + ZOOM + TAMAÑOS OK + ENEMIGOS “ZORRILLOS” + PUERTA + HAMBURGUESAS)
+   ✅ Pantalla sigue a Gordoso
+   ✅ Todo se auto-ajusta en móvil/PC (sin verse gigante)
+   ✅ Gordoso/puerta/burgers/zorrillos SIEMPRE visibles (depths)
+   ✅ Controles: A/D o Flechas, salto: W o Espacio, R reinicia
+   ✅ Botones táctiles (izq/der/saltar) responsivos
+
+   IMPORTANTE:
+   - Ajusta rutas/nombres de assets en preload si difieren.
+   - Ajusta frameWidth/frameHeight del spritesheet gordoso si tu PNG no es 64x64 por frame.
 */
 
 class MainScene extends Phaser.Scene {
@@ -12,14 +16,22 @@ class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    // ==== AJUSTA RUTAS A TUS ASSETS ====
-    // Cambia nombres si los tuyos son distintos
+    // ==== AJUSTA RUTAS / NOMBRES SI ES NECESARIO ====
     this.load.image("bg", "assets/bangkok_bg.jpg");
-    this.load.image("platform", "assets/platform.png"); // si no existe, usará una barra generada
+
+    // platform.png es opcional: si no existe, se crea una barra fallback
+    this.load.image("platform", "assets/platform.png");
+
     this.load.image("burger", "assets/burger.png");
     this.load.image("door", "assets/door.png");
-    this.load.image("girl", "assets/girl.png"); // si no tienes, puedes comentar el spawn
 
+    // Zorrillo: pon el nombre REAL de tu asset si no se llama así
+    this.load.image("skunk", "assets/skunk.png");
+
+    // Final girl opcional
+    this.load.image("girl", "assets/girl.png");
+
+    // Gordoso spritesheet: AJUSTA frameWidth/frameHeight si tu sheet es distinto
     this.load.spritesheet("gordoso", "assets/gordoso.png", {
       frameWidth: 64,
       frameHeight: 64
@@ -27,52 +39,56 @@ class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // ====== PARÁMETROS DE NIVEL (ajusta a tu gusto) ======
-    // Mundo más ancho que la pantalla para que haya scroll horizontal
-    this.levelWidth = 2400;
+    // ====== NIVEL ======
+    this.levelWidth = 2600;
     this.levelHeight = 720;
 
-    // Fondo
+    // Fondo (siempre atrás)
     this.bg = this.add.image(0, 0, "bg").setOrigin(0.5, 0.5);
-    this.bg.setScrollFactor(0); // fijo a la cámara
+    this.bg.setScrollFactor(0);
+    this.bg.setDepth(0);
 
-    // Physics bounds del mundo
+    // Mundo
     this.physics.world.setBounds(0, 0, this.levelWidth, this.levelHeight);
 
-    // Grupo de plataformas estáticas
+    // Plataformas
     this.platforms = this.physics.add.staticGroup();
 
-    // Si tienes imagen de plataforma úsala; si no, creamos barras con graphics+texture
     this.platformTextureKey = this.textures.exists("platform") ? "platform" : null;
     if (!this.platformTextureKey) {
       this._makeFallbackPlatformTexture();
       this.platformTextureKey = "platform_fallback";
     }
 
-    // ====== PLATAFORMAS (edita posiciones/anchos) ======
     // Suelo
     this._addPlatform(0, this.levelHeight - 40, this.levelWidth, 30);
 
-    // Algunas plataformas tipo parkour (similar a tu screenshot)
+    // Plataformas (parecido a tu layout)
     this._addPlatform(120, this.levelHeight - 170, 520, 22);
     this._addPlatform(520, this.levelHeight - 310, 520, 22);
-    this._addPlatform(1020, this.levelHeight - 450, 780, 22);
-    this._addPlatform(1540, this.levelHeight - 450, 680, 22);
+    this._addPlatform(1040, this.levelHeight - 450, 760, 22);
+    this._addPlatform(1700, this.levelHeight - 450, 760, 22);
 
     // ====== JUGADOR ======
     this.player = this.physics.add
       .sprite(140, this.levelHeight - 120, "gordoso", 0)
       .setCollideWorldBounds(true);
 
-    this.player.body.setSize(42, 56, true); // hitbox más amigable (ajusta si quieres)
+    // Tamaños “seguros” (si lo ves grande, baja scale a 0.7)
+    this.player.setScale(0.85);
+    this.player.setDepth(80);
+
+    // Hitbox más amigable
+    this.player.body.setSize(42, 56, true);
+
     this.player.setBounce(0);
     this.player.setDragX(1200);
-    this.player.setMaxVelocity(320, 900);
+    this.player.setMaxVelocity(340, 900);
 
-    // Colisiones
     this.physics.add.collider(this.player, this.platforms);
 
-    // ====== ANIMACIONES (ajusta frames según tu spritesheet) ======
+    // ====== ANIMACIONES ======
+    // Ajusta rangos si tus frames son distintos
     if (!this.anims.exists("idle")) {
       this.anims.create({
         key: "idle",
@@ -89,43 +105,59 @@ class MainScene extends Phaser.Scene {
         repeat: -1
       });
     }
-
     this.player.play("idle");
 
-    // ====== COLECCIONABLES (hamburguesas) ======
+    // ====== HAMBURGUESAS (coleccionables) ======
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
 
-    // Tamaño más pequeño (tu screenshot se ve grande)
-    const burgerScale = 0.35;
+    // CLAVE: scale pequeño para que no se vean gigantes
+    const burgerScale = 0.12;
 
-    // Coloca burgers sobre plataformas
     this._spawnBurger(620, this.levelHeight - 360, burgerScale);
     this._spawnBurger(1340, this.levelHeight - 500, burgerScale);
     this._spawnBurger(1650, this.levelHeight - 500, burgerScale);
+
+    this.score = 0;
+    this.totalBurgers = this.burgers.getLength();
+    this.exitOpen = false;
 
     this.physics.add.overlap(this.player, this.burgers, (player, burger) => {
       burger.destroy();
       this.score++;
       this.scoreText.setText(`🍔 ${this.score}/${this.totalBurgers}`);
-      if (this.score >= this.totalBurgers) {
-        this._openExit();
-      }
+      if (this.score >= this.totalBurgers) this._openExit();
     });
 
-    // ====== META (puerta) ======
+    // ====== ZORRILLOS (enemigos simples) ======
+    // Si no tienes skunk.png, comenta este bloque o cambia el asset.
+    this.skunkGroup = this.physics.add.group({ allowGravity: false, immovable: true });
+
+    // Spawns
+    this._spawnSkunk(380, this.levelHeight - 195);
+    this._spawnSkunk(820, this.levelHeight - 335);
+    this._spawnSkunk(1880, this.levelHeight - 475);
+
+    // Colisión con plataformas (para no atravesar si decides darles gravedad luego)
+    // (Ahora allowGravity=false, así que esto es opcional.)
+    // this.physics.add.collider(this.skunkGroup, this.platforms);
+
+    // Hit con jugador => reinicia
+    this.physics.add.overlap(this.player, this.skunkGroup, () => {
+      this._die();
+    });
+
+    // ====== PUERTA FINAL ======
     this.door = this.physics.add.staticSprite(this.levelWidth - 160, this.levelHeight - 110, "door");
     this.door.setVisible(false);
     this.door.body.enable = false;
+    this.door.setDepth(90);
+    this.door.setScale(0.6);
 
     this.physics.add.overlap(this.player, this.door, () => {
       if (this.exitOpen) this._win();
     });
 
-    // ====== UI (texto) ======
-    this.score = 0;
-    this.totalBurgers = this.burgers.getLength();
-    this.exitOpen = false;
-
+    // ====== UI ======
     this.scoreText = this.add
       .text(16, 44, `🍔 0/${this.totalBurgers}`, {
         fontFamily: "Arial",
@@ -148,31 +180,27 @@ class MainScene extends Phaser.Scene {
     this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
-    // ====== INPUT TÁCTIL (botones) ======
+    // ====== INPUT TÁCTIL ======
     this.touch = { left: false, right: false, jump: false };
     this._createTouchControls();
 
-    // ====== RESIZE (clave para tu problema) ======
+    // ====== RESIZE + ZOOM (CLAVE) ======
     this.scale.on("resize", (gameSize) => {
       const { width, height } = gameSize;
 
-      // Ajusta fondo a la pantalla
       this.bg.setPosition(width / 2, height / 2);
       this._fitBackgroundToScreen(width, height);
 
-      // Reubica UI fija
-      this.scoreText.setPosition(16, 44);
-
-      // Reubica controles táctiles
-      this._layoutTouchControls(width, height);
+      this._applyCameraAndUIScale(width, height);
     });
 
-    // Llamada inicial para fit
+    // Inicial
     const w = this.scale.width;
     const h = this.scale.height;
+
     this.bg.setPosition(w / 2, h / 2);
     this._fitBackgroundToScreen(w, h);
-    this._layoutTouchControls(w, h);
+    this._applyCameraAndUIScale(w, h);
   }
 
   update() {
@@ -182,7 +210,7 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
-    // Lectura de inputs (teclado + touch)
+    // Inputs
     const left =
       this.cursors.left.isDown || this.keyA.isDown || this.touch.left === true;
 
@@ -196,8 +224,6 @@ class MainScene extends Phaser.Scene {
       this._consumeTouchJump();
 
     // Movimiento
-    const speed = 240;
-
     if (left) {
       this.player.setAccelerationX(-1200);
       this.player.setFlipX(true);
@@ -221,6 +247,9 @@ class MainScene extends Phaser.Scene {
       this.player.setPosition(140, this.levelHeight - 120);
       this.player.setVelocity(0, 0);
     }
+
+    // Zorrillos: movimiento simple “patrulla” horizontal
+    this._updateSkunks();
   }
 
   // =========================================================
@@ -230,16 +259,58 @@ class MainScene extends Phaser.Scene {
   _spawnBurger(x, y, scale) {
     const b = this.burgers.create(x, y, "burger");
     b.setScale(scale);
-    b.body.setCircle(Math.max(10, (b.displayWidth * 0.35) | 0));
+    b.setDepth(70);
+
+    // Hitbox circular razonable según tamaño render
+    const r = Math.max(8, (b.displayWidth * 0.25) | 0);
+    b.body.setCircle(r);
     return b;
+  }
+
+  _spawnSkunk(x, y) {
+    // Si el asset no existe, no revientes
+    if (!this.textures.exists("skunk")) return null;
+
+    const s = this.skunkGroup.create(x, y, "skunk");
+    s.setDepth(75);
+    s.setScale(0.35); // si se ve grande, baja a 0.25
+    s.body.setSize(s.width * 0.6, s.height * 0.7, true);
+
+    // Config de patrulla
+    s.patrol = {
+      originX: x,
+      range: 140,
+      speed: 50 + Math.random() * 25,
+      dir: Math.random() > 0.5 ? 1 : -1
+    };
+
+    return s;
+  }
+
+  _updateSkunks() {
+    if (!this.skunkGroup) return;
+
+    this.skunkGroup.children.iterate((s) => {
+      if (!s || !s.active || !s.patrol) return;
+
+      const minX = s.patrol.originX - s.patrol.range;
+      const maxX = s.patrol.originX + s.patrol.range;
+
+      s.x += s.patrol.dir * (s.patrol.speed * (this.game.loop.delta / 1000));
+
+      if (s.x < minX) s.patrol.dir = 1;
+      if (s.x > maxX) s.patrol.dir = -1;
+
+      s.setFlipX(s.patrol.dir < 0);
+    });
   }
 
   _openExit() {
     this.exitOpen = true;
+
     this.door.setVisible(true);
     this.door.body.enable = true;
 
-    // Mensaje
     if (!this.winHint) {
       this.winHint = this.add
         .text(16, 80, "✅ Puerta abierta → ve al final", {
@@ -254,29 +325,25 @@ class MainScene extends Phaser.Scene {
     }
   }
 
+  _die() {
+    // Reinicio simple (puedes poner animación luego)
+    this.scene.restart();
+  }
+
   _win() {
-    // Bloquea controles
-    this.player.setAccelerationX(0);
-    this.player.setVelocityX(0);
+    // Bloquea overlaps repetidos
+    this.door.body.enable = false;
 
-    // “Final girl” opcional si tienes sprite
-    if (this.textures.exists("girl")) {
-      if (!this.girl) {
-        this.girl = this.add.sprite(this.door.x + 90, this.door.y + 10, "girl");
-        this.girl.setDepth(10);
-      }
-    }
-
-    // Pantalla win
+    // UI de win
     const w = this.scale.width;
     const h = this.scale.height;
 
-    const panel = this.add
+    this.add
       .rectangle(w / 2, h / 2, Math.min(520, w * 0.9), 220, 0x000000, 0.55)
       .setScrollFactor(0)
       .setDepth(2000);
 
-    const txt = this.add
+    this.add
       .text(w / 2, h / 2, "🎉 ¡Ganaste!\nPresiona R para reiniciar", {
         fontFamily: "Arial",
         fontSize: "26px",
@@ -287,12 +354,15 @@ class MainScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(2001);
 
-    // Detiene overlaps repetidos
-    this.door.body.enable = false;
+    // “Final girl” opcional si existe el asset
+    if (this.textures.exists("girl") && !this.girl) {
+      this.girl = this.add.sprite(this.door.x + 90, this.door.y + 10, "girl");
+      this.girl.setDepth(95);
+      this.girl.setScale(0.6);
+    }
   }
 
   _addPlatform(x, y, width, height) {
-    // Construimos plataforma con imagen estirada o textura fallback
     const p = this.platforms.create(x + width / 2, y + height / 2, this.platformTextureKey);
     p.setDisplaySize(width, height);
     p.refreshBody();
@@ -300,7 +370,6 @@ class MainScene extends Phaser.Scene {
   }
 
   _makeFallbackPlatformTexture() {
-    // Crea una textura tipo “barra” si no existe platform.png
     const g = this.add.graphics();
     g.fillStyle(0x1a1a1a, 1);
     g.fillRoundedRect(0, 0, 512, 48, 18);
@@ -311,25 +380,42 @@ class MainScene extends Phaser.Scene {
   }
 
   _fitBackgroundToScreen(screenW, screenH) {
-    // Ajusta bg para cubrir toda la pantalla (cover)
     const tex = this.textures.get("bg");
     if (!tex || !tex.getSourceImage()) return;
 
     const imgW = tex.getSourceImage().width;
     const imgH = tex.getSourceImage().height;
 
+    // cover
     const scale = Math.max(screenW / imgW, screenH / imgH);
     this.bg.setScale(scale);
+  }
+
+  _applyCameraAndUIScale(w, h) {
+    // Base “diseño”
+    const baseW = 960;
+    const baseH = 540;
+
+    // En pantallas pequeñas, zoom < 1 para que NO se vea gigante
+    const zoom = Math.min(w / baseW, h / baseH);
+
+    this.cameras.main.setZoom(zoom);
+
+    // UI fija
+    if (this.scoreText) this.scoreText.setPosition(16, 44);
+
+    // Controles táctiles
+    this._layoutTouchControls(w, h);
   }
 
   // ---------------- Touch controls ----------------
 
   _createTouchControls() {
-    // Si no es táctil, igual los crea pero invisibles; puedes forzarlos visibles si quieres.
     this.btns = {};
 
     const makeBtn = (label) => {
       const c = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
+
       const bg = this.add.circle(0, 0, 34, 0x000000, 0.35);
       const tx = this.add.text(0, 0, label, {
         fontFamily: "Arial",
@@ -348,7 +434,6 @@ class MainScene extends Phaser.Scene {
     this.btns.right = makeBtn("▶");
     this.btns.jump = makeBtn("⤒");
 
-    // Eventos
     this.btns.left.on("pointerdown", () => (this.touch.left = true));
     this.btns.left.on("pointerup", () => (this.touch.left = false));
     this.btns.left.on("pointerout", () => (this.touch.left = false));
@@ -361,7 +446,7 @@ class MainScene extends Phaser.Scene {
     this.btns.jump.on("pointerup", () => (this.touch.jump = false));
     this.btns.jump.on("pointerout", () => (this.touch.jump = false));
 
-    // Por defecto: visibles (si quieres solo móvil, coméntalo y haz la lógica por userAgent)
+    // Si quieres que solo se vean en móvil, aquí podrías ocultarlos en desktop.
     this.btns.left.setVisible(true);
     this.btns.right.setVisible(true);
     this.btns.jump.setVisible(true);
@@ -370,19 +455,12 @@ class MainScene extends Phaser.Scene {
   _layoutTouchControls(w, h) {
     if (!this.btns) return;
 
-    // Margen desde bordes
     const m = 60;
 
-    // Izquierda: abajo-izq
     this.btns.left.setPosition(m, h - m);
-
-    // Derecha: al lado
     this.btns.right.setPosition(m + 90, h - m);
-
-    // Saltar: abajo-der
     this.btns.jump.setPosition(w - m, h - m);
 
-    // En pantallas muy bajas, sube un poco
     if (h < 420) {
       this.btns.left.y = h - 50;
       this.btns.right.y = h - 50;
@@ -392,7 +470,6 @@ class MainScene extends Phaser.Scene {
 
   _consumeTouchJump() {
     if (this.touch.jump) {
-      // “one-shot” para que no salte infinito si mantienes presionado
       this.touch.jump = false;
       return true;
     }
