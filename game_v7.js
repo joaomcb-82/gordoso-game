@@ -59,7 +59,7 @@ class PlayScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(90, 420, "gordoso");
 
     // ✅ “pisar” mejor: origen hacia los pies
-    this.player.setOrigin(0.5, 0.92);
+    this.player.setOrigin(0.5, 0.88);
 
     // ✅ Gordoso más chico
     this.player.setScale(0.10);
@@ -224,7 +224,7 @@ class PlayScene extends Phaser.Scene {
 
     this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
     this.add.text(BASE_W / 2, 115, "GAME OVER", { fontSize: "44px", fill: "#fff" }).setOrigin(0.5);
-    this.add.text(BASE_W / 2, 165, "Te atrapó el zorrillo 😵", { fontSize: "20px", fill: "#fff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 165, "Te atrapó Toxin 😵", { fontSize: "20px", fill: "#fff" }).setOrigin(0.5);
     this.add.text(BASE_W / 2, 210, "Presiona R para reiniciar", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
   }
 
