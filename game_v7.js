@@ -139,7 +139,7 @@
 
       // Gordoso (AJUSTE tamaño: antes gigante -> ahora proporcional)
       this.player = this.physics.add.sprite(120, BASE_H - 120, "gordoso");
-      this.player.setScale(0.22); // <-- AJUSTA AQUÍ si lo quieres un pelo más chico/grande
+      this.player.setScale(0.18); // <-- AJUSTA AQUÍ si lo quieres un pelo más chico/grande
       this.player.setCollideWorldBounds(true);
       this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.75, true);
 
