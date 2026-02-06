@@ -471,14 +471,14 @@ class FinalRoom2Scene extends Phaser.Scene {
     this.autoWalk = true;
     this.player.setVelocityX(170);
 
-   this.physics.add.overlap(this.player, this.girl, () => {
+  this.physics.add.overlap(this.player, this.girl, () => {
   if (!this.autoWalk) return;
   this.autoWalk = false;
 
   // 1) se detiene
   this.player.setVelocityX(0);
 
-  // 2) mini pausa + temblor tipo "Larry moment"
+  // 2) mini temblor
   this.cameras.main.shake(220, 0.006);
 
   // 3) pausa corta
@@ -491,9 +491,8 @@ class FinalRoom2Scene extends Phaser.Scene {
       this.scene.start("curtain", { totalScore: this.totalScore });
     });
   });
-});
+}, null, this);
 
-    });
 
     // R reinicia (se mantiene)
     this.input.keyboard.on("keydown-R", () => window.location.reload());
