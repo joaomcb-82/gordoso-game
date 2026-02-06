@@ -14,9 +14,6 @@ class MainScene extends Phaser.Scene {
     // Ajusta rutas si tus archivos se llaman distinto
     this.load.image("bg", "assets/bangkok_bg.jpg");
 
-    // Platform opcional
-    this.load.image("platform", "assets/platform.png");
-
     // IMPORTANTE: gordoso como IMAGEN (NO spritesheet)
     this.load.image("gordoso", "assets/gordoso.png");
 
@@ -43,10 +40,8 @@ class MainScene extends Phaser.Scene {
     // Plataformas
     this.platforms = this.physics.add.staticGroup();
 
-    this.platformTextureKey = this.textures.exists("platform") ? "platform" : null;
-    if (!this.platformTextureKey) {
-      this._makeFallbackPlatformTexture();
-      this.platformTextureKey = "platform_fallback";
+    this._makeFallbackPlatformTexture();
+this.platformTextureKey = "platform_fallback";
     }
 
     // Suelo + plataformas
@@ -86,13 +81,12 @@ class MainScene extends Phaser.Scene {
     this.exitOpen = false;
 
     // Overlap para recoger
-    this.physics.add.overlap(this.player, this.burgers, (player, burger) => {
-      // destruye bien el body para que no vuelva a “chocar”
-      burger.disableBody(true, true);
-      this.score++;
-      this.scoreText.setText(`🍔 ${this.score}/${this.totalBurgers}`);
-      if (this.score >= this.totalBurgers) this._openExit();
-    });
+    this.physics.add.overlap(this.player, this.burgers, (_p, burger) => {
+  burger.disableBody(true, true);
+  this.score++;
+  this.scoreText.setText(`🍔 ${this.score}/${this.totalBurgers}`);
+  if (this.score >= this.totalBurgers) this._openExit();
+});
 
     // Zorrillos (opcionales)
     this.skunkGroup = this.physics.add.group({ allowGravity: false, immovable: true });
