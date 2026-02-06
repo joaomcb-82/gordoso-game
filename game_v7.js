@@ -471,11 +471,28 @@ class FinalRoom2Scene extends Phaser.Scene {
     this.autoWalk = true;
     this.player.setVelocityX(170);
 
-    this.physics.add.overlap(this.player, this.girl, () => {
-      if (!this.autoWalk) return;
-      this.autoWalk = false;
-      this.player.setVelocityX(0);
+   this.physics.add.overlap(this.player, this.girl, () => {
+  if (!this.autoWalk) return;
+  this.autoWalk = false;
+
+  // 1) se detiene
+  this.player.setVelocityX(0);
+
+  // 2) mini pausa + temblor tipo "Larry moment"
+  this.cameras.main.shake(220, 0.006);
+
+  // 3) pausa corta
+  this.time.delayedCall(350, () => {
+    // 4) fade out
+    this.cameras.main.fadeOut(350, 0, 0, 0);
+
+    // 5) entrar a la cortina
+    this.time.delayedCall(380, () => {
       this.scene.start("curtain", { totalScore: this.totalScore });
+    });
+  });
+});
+
     });
 
     // R reinicia (se mantiene)
@@ -522,7 +539,7 @@ class CurtainScene extends Phaser.Scene {
       hearts.push(t);
     }
 
-    const behind = this.add.text(BASE_W / 2, BASE_H / 2, "…\n(ruidos sospechosos)\n…", {
+    const behind = this.add.text(BASE_W / 2, BASE_H / 2, "…\n(Mmmm Travas - ruidos sospechosos - Take Take)\n…", {
       fontSize: "28px",
       fill: "#ffd6e0",
       align: "center"
