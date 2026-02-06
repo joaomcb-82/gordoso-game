@@ -1,320 +1,293 @@
-/* game.js — BASE GAMEPLAY (Level 1 ONLY)
-   - gordoso.png y skunk.png son IMÁGENES (no spritesheet)
-   - sin puerta / sin chica / sin nivel 2 (solo base estable)
-*/
+console.log("✅ GAME_V7 FINAL CARGADO (ESCENAS) — PUERTA SIEMPRE + PISAR FIX");
 
-class Level1 extends Phaser.Scene {
+const BASE_W = 960;
+const BASE_H = 540;
+
+class PlayScene extends Phaser.Scene {
   constructor() {
-    super("Level1");
+    super("play");
   }
 
   preload() {
-    // Assets confirmados en /assets
     this.load.image("bg", "assets/bangkok_bg.jpg");
     this.load.image("gordoso", "assets/gordoso.png");
-    this.load.image("skunk", "assets/skunk.png");
     this.load.image("burger", "assets/burger.png");
+    this.load.image("skunk", "assets/skunk.png");
+    this.load.image("door", "assets/door.png");
+    this.load.image("girl", "assets/girl.png");
+    this.load.image("flag", "assets/thai_flag.png");
   }
 
   create() {
-    // ===== CONFIG NIVEL =====
-    this.levelWidth = 2600;
-    this.levelHeight = 720;
+    this.score = 0;
+    this.ended = false;
 
-    // Bounds del mundo
-    this.physics.world.setBounds(0, 0, this.levelWidth, this.levelHeight);
+    // ===== Fondo (cover) =====
+    const bg = this.add.image(BASE_W / 2, BASE_H / 2, "bg");
+    const cover = Math.max(BASE_W / bg.width, BASE_H / bg.height);
+    bg.setScale(cover);
 
-    // Fondo (visual)
-    this.bg = this.add.image(0, 0, "bg").setOrigin(0.5);
-    this.bg.setScrollFactor(0);
-    this.bg.setDepth(0);
+    // ===== Textura plataforma (sin platform.png) =====
+    const g = this.add.graphics();
+    g.fillStyle(0x111111, 0.92);
+    g.fillRoundedRect(0, 0, 260, 30, 10);
+    g.lineStyle(3, 0xffffff, 0.22);
+    g.strokeRoundedRect(0, 0, 260, 30, 10);
+    g.generateTexture("plat", 260, 30);
+    g.destroy();
 
-    // Plataformas: textura fallback (no depende de PNG)
-    this._makePlatformTexture();
+    // ===== Plataformas =====
     this.platforms = this.physics.add.staticGroup();
-    this.platformRects = []; // guardo datos para spawns “encima”
 
-    // Suelo
-    this._addPlatform(0, this.levelHeight - 40, this.levelWidth, 30);
+    const ground = this.platforms.create(BASE_W / 2, 520, "plat").setScale(4.2, 1.5);
+    ground.refreshBody();
 
-    // Plataformas (x, yTop, width, height)
-    this._addPlatform(120, this.levelHeight - 170, 520, 22);
-    this._addPlatform(520, this.levelHeight - 310, 520, 22);
-    this._addPlatform(1040, this.levelHeight - 450, 760, 22);
-    this._addPlatform(1700, this.levelHeight - 450, 760, 22);
+    const p1 = this.platforms.create(250, 410, "plat"); p1.refreshBody();
+    const p2 = this.platforms.create(520, 330, "plat"); p2.refreshBody();
+    const p3 = this.platforms.create(780, 250, "plat"); p3.refreshBody();
+    const p4 = this.platforms.create(900, 180, "plat").setScale(1.2, 1); p4.refreshBody();
 
-    // ===== PLAYER (GORDOSO) =====
-    this.player = this.physics.add.image(140, this.levelHeight - 120, "gordoso");
-    this.player.setDepth(100);
+    // Bounds útiles
+    const boundsFrom = (platSprite) => {
+      const b = platSprite.getBounds();
+      return { left: b.left + 18, right: b.right - 18, top: b.top };
+    };
+    const bGround = boundsFrom(ground);
+    const bP2 = boundsFrom(p2);
+
+    // ===== Player (Gordoso) =====
+    this.player = this.physics.add.sprite(90, 420, "gordoso");
+
+    // ✅ “pisar” mejor: origen hacia los pies
+    this.player.setOrigin(0.5, 0.92);
+
+    // ✅ Gordoso más chico
+    this.player.setScale(0.10);
+
     this.player.setCollideWorldBounds(true);
 
-    // 🔥 TAMAÑO GORDOSO (baja/sube aquí)
-    this.PLAYER_SCALE = 0.18;
-    this.player.setScale(this.PLAYER_SCALE);
+    // ✅ Hitbox pegada a los pies
+    const bw = this.player.width * 0.45;
+    const bh = this.player.height * 0.55;
+    this.player.body.setSize(bw, bh);
+    this.player.body.setOffset((this.player.width - bw) / 2, this.player.height - bh);
 
-    // Hitbox proporcional (no uses size “auto” del PNG)
-    this._setBodyToDisplay(this.player, 0.55, 0.78);
-
-    // Movimiento
-    this.player.setDragX(1600);
-    this.player.setMaxVelocity(360, 900);
-    this.player.setBounce(0);
-
-    // Colisión con plataformas
     this.physics.add.collider(this.player, this.platforms);
 
-    // ===== HAMBURGUESAS (coleccionables) =====
+    // ===== Controles =====
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.keys = this.input.keyboard.addKeys({
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      D: Phaser.Input.Keyboard.KeyCodes.D,
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      R: Phaser.Input.Keyboard.KeyCodes.R
+    });
+
+    // ===== Hamburguesas (SOLO PUNTOS) =====
     this.burgers = this.physics.add.group({ allowGravity: false, immovable: true });
 
-    // Tamaño burger
-    this.BURGER_SCALE = 0.095;
+    const makeBurger = (x, y) => {
+      const b = this.burgers.create(x, y, "burger");
+      b.setScale(0.09);
+      b.body.setSize(b.displayWidth, b.displayHeight, true);
+      return b;
+    };
 
-    // Spawns encima de plataformas (index 1..4 según creación)
-    this._spawnBurgerOnPlatform(2, 0.55); // plataforma 2
-    this._spawnBurgerOnPlatform(3, 0.45); // plataforma 3
-    this._spawnBurgerOnPlatform(4, 0.70); // plataforma 4
+    // Puedes poner las que quieras; aquí 6 por ejemplo
+    makeBurger(200, 380);
+    makeBurger(320, 380);
+    makeBurger(520, 300);
+    makeBurger(640, 300);
+    makeBurger(780, 220);
+    makeBurger(900, 150);
 
-    this.score = 0;
-    this.totalBurgers = this.burgers.getLength();
-
-    // Overlap robusto: tocar = recoger
-    this.physics.add.overlap(this.player, this.burgers, (_p, burger) => {
-      burger.disableBody(true, true);
+    this.physics.add.overlap(this.player, this.burgers, (_p, b) => {
+      b.disableBody(true, true);
       this.score++;
-      this.scoreText.setText(`🍔 ${this.score}/${this.totalBurgers}`);
+      this.scoreText.setText("🍔 " + this.score);
     });
 
-    // ===== ZORRILLOS (enemigos) =====
-    this.enemies = this.physics.add.group({
-      allowGravity: true
-    });
+    // ===== Zorrillos caminando (SIN rebote) =====
+    this.skunks = this.physics.add.group();
 
-    // Escala enemigos proporcional a Gordoso
-    this.SKUNK_SCALE = 0.16; // ajusta si los quieres un poco más grandes/pequeños
+    // 1) suelo
+    this.makeSkunkWalker(420, 470, bGround.left, bGround.right, 160);
 
-    // Spawn sobre plataformas
-    this._spawnSkunkWalkerOnPlatform(1, 0.55); // plat 1
-    this._spawnSkunkWalkerOnPlatform(2, 0.25); // plat 2
-    this._spawnSkunkWalkerOnPlatform(4, 0.35); // plat 4
+    // 2) plataforma media
+    this.makeSkunkWalker(520, 0, bP2.left, bP2.right, 140); // cae sobre plataforma
 
-    // Para que CAMINEN sobre las plataformas (no floten)
-    this.physics.add.collider(this.enemies, this.platforms);
+    this.physics.add.collider(this.skunks, this.platforms);
 
-    // Tocar enemigo = restart
-    this.physics.add.overlap(this.player, this.enemies, () => {
-      this.scene.restart();
-    });
+    // Tocar zorrillo = game over
+    this.physics.add.overlap(this.player, this.skunks, () => this.gameOver(), null, this);
+
+    // ===== Puerta final (SIEMPRE) =====
+    this.door = this.physics.add.staticImage(930, 120, "door").setScale(0.16);
+    this.door.refreshBody();
+
+    // Visible y activa desde el inicio
+    this.door.setVisible(true);
+    this.door.body.enable = true;
+
+    this.physics.add.overlap(this.player, this.door, () => this.win(), null, this);
 
     // ===== UI =====
-    this.scoreText = this.add
-      .text(16, 44, `🍔 0/${this.totalBurgers}`, {
-        fontFamily: "Arial",
-        fontSize: "18px",
-        color: "#fff",
-        backgroundColor: "rgba(0,0,0,0.35)",
-        padding: { x: 10, y: 6 }
-      })
-      .setScrollFactor(0)
-      .setDepth(999);
-
-    // ===== CÁMARA =====
-    this.cameras.main.setBounds(0, 0, this.levelWidth, this.levelHeight);
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-
-    // ===== INPUT =====
-    this.cursors = this.input.keyboard.createCursorKeys();
-    this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-
-    // ===== RESIZE SIMPLE (sin zoom raro) =====
-    this.scale.on("resize", (gameSize) => {
-      const { width, height } = gameSize;
-      this.bg.setPosition(width / 2, height / 2);
-      this._fitBackgroundToScreen(width, height);
+    this.scoreText = this.add.text(14, 14, "🍔 0", {
+      fontSize: "18px",
+      fill: "#111",
+      backgroundColor: "rgba(255,255,255,0.85)",
+      padding: { x: 10, y: 6 }
     });
 
-    const w = this.scale.width;
-    const h = this.scale.height;
-    this.bg.setPosition(w / 2, h / 2);
-    this._fitBackgroundToScreen(w, h);
+    this.add.text(14, 48, "A/D o ←→ mover • W/Espacio/↑ saltar • R reinicia", {
+      fontSize: "14px",
+      fill: "#fff",
+      backgroundColor: "rgba(0,0,0,0.35)",
+      padding: { x: 10, y: 6 }
+    });
   }
 
   update() {
-    // Restart
-    if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
-      this.scene.restart();
+    if (this.ended) {
+      if (this.keys.R.isDown) window.location.reload();
       return;
     }
 
-    // Movimiento
-    const left = this.cursors.left.isDown || this.keyA.isDown;
-    const right = this.cursors.right.isDown || this.keyD.isDown;
+    const left = this.keys.A.isDown || this.cursors.left.isDown;
+    const right = this.keys.D.isDown || this.cursors.right.isDown;
 
-    const jump =
-      Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-      Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-      Phaser.Input.Keyboard.JustDown(this.keyW);
+    if (left) this.player.setVelocityX(-260);
+    else if (right) this.player.setVelocityX(260);
+    else this.player.setVelocityX(0);
 
-    if (left) {
-      this.player.setAccelerationX(-1500);
-      this.player.setFlipX(true);
-    } else if (right) {
-      this.player.setAccelerationX(1500);
-      this.player.setFlipX(false);
-    } else {
-      this.player.setAccelerationX(0);
+    const onGround = this.player.body.blocked.down || this.player.body.touching.down;
+    const jumpPressed = this.keys.W.isDown || this.cursors.space.isDown || this.cursors.up.isDown;
+
+    if (jumpPressed && onGround) {
+      this.player.setVelocityY(-580);
     }
 
-    if (jump && this.player.body.onFloor()) {
-      this.player.setVelocityY(-520);
-    }
+    // Patrulla zorrillos (solo si pisan)
+    this.skunks.children.iterate((s) => {
+      if (!s?.body || !s.getData("patrol")) return;
+      if (!s.body.blocked.down) return;
 
-    // Patrol enemigos
-    this._updateSkunks();
+      const leftBound = s.getData("left");
+      const rightBound = s.getData("right");
+      let dir = s.getData("dir");
+      const speed = s.getData("speed");
 
-    // Safety fall
-    if (this.player.y > this.levelHeight + 250) {
-      this.player.setPosition(140, this.levelHeight - 120);
-      this.player.setVelocity(0, 0);
-    }
-  }
+      s.setVelocityX(dir * speed);
 
-  // ==============================
-  // HELPERS
-  // ==============================
-
-  _makePlatformTexture() {
-    const g = this.add.graphics();
-    g.fillStyle(0x101010, 1);
-    g.fillRoundedRect(0, 0, 512, 48, 18);
-    g.fillStyle(0x2ee66b, 1);
-    g.fillRoundedRect(10, 40, 492, 6, 3);
-    g.generateTexture("platform_fallback", 512, 48);
-    g.destroy();
-  }
-
-  _addPlatform(x, yTop, width, height) {
-    const p = this.platforms.create(x + width / 2, yTop + height / 2, "platform_fallback");
-    p.setDisplaySize(width, height);
-    p.refreshBody();
-
-    // Guarda rect para spawns encima
-    this.platformRects.push({
-      x,
-      yTop,
-      width,
-      height,
-      left: x,
-      right: x + width,
-      top: yTop
-    });
-
-    return p;
-  }
-
-  _spawnBurgerOnPlatform(platformIndex1Based, xRatio = 0.5) {
-    const plat = this.platformRects[platformIndex1Based - 1];
-    if (!plat) return;
-
-    const x = plat.left + plat.width * xRatio;
-    const y = plat.top - 26; // encima
-
-    const b = this.burgers.create(x, y, "burger");
-    b.setDepth(90);
-    b.setScale(this.BURGER_SCALE);
-
-    // Hitbox = lo que se ve
-    b.body.setSize(b.displayWidth, b.displayHeight, true);
-
-    return b;
-  }
-
-  _spawnSkunkWalkerOnPlatform(platformIndex1Based, xRatio = 0.5) {
-    const plat = this.platformRects[platformIndex1Based - 1];
-    if (!plat) return;
-
-    const x = plat.left + plat.width * xRatio;
-
-    // Y de spawn: un poco arriba; la gravedad lo hace caer y el collider lo “asienta”
-    const y = plat.top - 120;
-
-    const s = this.enemies.create(x, y, "skunk");
-    s.setDepth(95);
-    s.setScale(this.SKUNK_SCALE);
-
-    // hitbox
-    this._setBodyToDisplay(s, 0.65, 0.70);
-
-    // patrol bounds dentro de la plataforma
-    s.patrol = {
-      left: plat.left + 25,
-      right: plat.right - 25,
-      speed: 70,   // velocidad caminar
-      dir: Math.random() > 0.5 ? 1 : -1
-    };
-
-    // Para que no se “patine” raro
-    s.setDragX(0);
-    s.setMaxVelocity(120, 900);
-
-    return s;
-  }
-
-  _updateSkunks() {
-    const dt = this.game.loop.delta / 1000;
-
-    this.enemies.children.iterate((s) => {
-      if (!s || !s.active || !s.patrol) return;
-
-      // Solo mueve si ya está apoyado (evita “volar” en caída)
-      if (!s.body.onFloor()) return;
-
-      s.setVelocityX(s.patrol.dir * s.patrol.speed);
-
-      if (s.x < s.patrol.left) {
-        s.x = s.patrol.left;
-        s.patrol.dir = 1;
-      } else if (s.x > s.patrol.right) {
-        s.x = s.patrol.right;
-        s.patrol.dir = -1;
+      if (s.x < leftBound) {
+        s.x = leftBound;
+        dir = 1;
+      } else if (s.x > rightBound) {
+        s.x = rightBound;
+        dir = -1;
       }
 
-      s.setFlipX(s.patrol.dir < 0);
+      s.setData("dir", dir);
+      s.setFlipX(dir < 0);
     });
   }
 
-  _setBodyToDisplay(obj, wFactor = 1, hFactor = 1) {
-    obj.body.setSize(obj.displayWidth * wFactor, obj.displayHeight * hFactor, true);
+  makeSkunkWalker(x, y, leftBound, rightBound, speed) {
+    const s = this.physics.add.sprite(x, y, "skunk");
+    s.setScale(0.12);
+
+    // ✅ sin rebote (no pelota)
+    s.setBounce(0);
+
+    s.setCollideWorldBounds(true);
+
+    // hitbox decente
+    const bw = s.width * 0.7;
+    const bh = s.height * 0.7;
+    s.body.setSize(bw, bh, true);
+
+    // Patrol data
+    s.setData("patrol", true);
+    s.setData("left", leftBound);
+    s.setData("right", rightBound);
+    s.setData("speed", speed);
+    s.setData("dir", Math.random() > 0.5 ? 1 : -1);
+
+    this.skunks.add(s);
   }
 
-  _fitBackgroundToScreen(screenW, screenH) {
-    const tex = this.textures.get("bg");
-    if (!tex || !tex.getSourceImage()) return;
+  gameOver() {
+    if (this.ended) return;
+    this.ended = true;
+    this.physics.pause();
+    this.player.setTint(0xff0000);
 
-    const imgW = tex.getSourceImage().width;
-    const imgH = tex.getSourceImage().height;
+    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W, BASE_H, 0x000000, 0.55);
+    this.add.text(BASE_W / 2, 115, "GAME OVER", { fontSize: "44px", fill: "#fff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 165, "Te atrapó el zorrillo 😵", { fontSize: "20px", fill: "#fff" }).setOrigin(0.5);
+    this.add.text(BASE_W / 2, 210, "Presiona R para reiniciar", { fontSize: "18px", fill: "#fff" }).setOrigin(0.5);
+  }
 
-    const scale = Math.max(screenW / imgW, screenH / imgH);
-    this.bg.setScale(scale);
+  win() {
+    if (this.ended) return;
+    this.ended = true;
+    this.scene.start("finalRoom", { score: this.score });
   }
 }
 
-// ===== CONFIG =====
+class FinalRoomScene extends Phaser.Scene {
+  constructor() {
+    super("finalRoom");
+  }
+
+  create(data) {
+    const score = data?.score ?? 0;
+
+    this.cameras.main.setBackgroundColor("#1b1b1b");
+    this.add.rectangle(BASE_W / 2, BASE_H / 2, BASE_W - 120, BASE_H - 120, 0x2a2a2a, 1).setStrokeStyle(6, 0x111111, 1);
+
+    this.add.circle(BASE_W / 2, 120, 55, 0xffe08a, 0.18);
+    this.add.circle(BASE_W / 2, 120, 28, 0xffe08a, 0.25);
+
+    this.add.text(BASE_W / 2, 70, "¡RESCATE LOGRADO! 🇹🇭", {
+      fontSize: "40px",
+      fill: "#ffffff"
+    }).setOrigin(0.5);
+
+    this.add.text(BASE_W / 2, 118, `Hamburguesas: ${score}`, {
+      fontSize: "22px",
+      fill: "#ffffff"
+    }).setOrigin(0.5);
+
+    this.add.image(260, 360, "gordoso").setScale(0.15);
+    this.add.image(520, 360, "girl").setScale(0.26);
+    this.add.image(740, 360, "flag").setScale(0.18);
+
+    this.add.text(BASE_W / 2, 470, "Presiona R para reiniciar", {
+      fontSize: "18px",
+      fill: "#ffffff"
+    }).setOrigin(0.5);
+
+    this.input.keyboard.on("keydown-R", () => window.location.reload());
+  }
+}
+
 const config = {
   type: Phaser.AUTO,
+  width: BASE_W,
+  height: BASE_H,
   parent: "game",
-  backgroundColor: "#000",
+  backgroundColor: "#000000",
   scale: {
-    mode: Phaser.Scale.RESIZE,
+    mode: Phaser.Scale.ENVELOP,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   physics: {
     default: "arcade",
-    arcade: { gravity: { y: 900 }, debug: false }
+    arcade: { gravity: { y: 1200 }, debug: false }
   },
-  scene: [Level1]
+  scene: [PlayScene, FinalRoomScene]
 };
 
 new Phaser.Game(config);
+
